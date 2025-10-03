@@ -386,6 +386,210 @@ def get_enricher_job_info(job_id):
     except Exception:
         return None
 
+# Function to check if data is actually enriched
+def check_if_data_enriched(data):
+    """Check if the data has been properly enriched"""
+    if not data:
+        return False
+    
+    # Count how many entries have enriched fields
+    enriched_count = 0
+    non_empty_fields_count = 0
+    
+    # Fields that indicate enrichment from LinkedIn
+    important_fields = [
+        'skills_tags', 'summary', 'education', 'current_company', 
+        'headline', 'industry', 'school', 'jobTitle', 'company'
+    ]
+    
+    # Fields that are typically present in PhantomBuster output
+    phantom_fields = [
+        'profileUrl', 'fullName', 'firstName', 'lastName', 
+        'connectionDegree', 'profileImageUrl', 'timestamp'
+    ]
+    
+    for entry in data:
+        # Check for important enriched fields
+        has_enriched_field = False
+        has_phantom_field = False
+        
+        # Count non-empty fields
+        field_count = 0
+        for field in entry:
+            if field in entry and entry[field] and str(entry[field]).strip():
+                field_count += 1
+        
+        # Check for important enrichment fields
+        for field in important_fields:
+            if field in entry and entry[field] and len(str(entry[field])) > 3:
+                has_enriched_field = True
+                break
+        
+        # Check for PhantomBuster-specific fields
+        for field in phantom_fields:
+            if field in entry and entry[field] and len(str(entry[field])) > 3:
+                has_phantom_field = True
+                break
+        
+        # If entry has many fields or has important fields, count it as enriched
+        if has_enriched_field or has_phantom_field or field_count >= 5:
+            enriched_count += 1
+        
+        # Count entries with at least some data
+        if field_count >= 3:
+            non_empty_fields_count += 1
+    
+    # Consider data enriched if:
+    # 1. At least 20% of entries have important enriched fields, OR
+    # 2. At least 50% of entries have non-empty fields
+    return (enriched_count >= len(data) * 0.2) or (non_empty_fields_count >= len(data) * 0.5)
+
+# Function to provide demo enriched data
+def get_demo_enriched_data(existing_data):
+    """Add demo enriched data to existing LinkedIn profiles"""
+    enriched_data = []
+    
+    # Sample enrichment data based on PhantomBuster format
+    timestamp = datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+    
+    enrichments = [
+        {
+            'profileUrl': 'https://www.linkedin.com/in/data-scientist-chile/',
+            'fullName': 'Diego Ramírez Torres',
+            'firstName': 'Diego',
+            'lastName': 'Ramírez Torres',
+            'headline': 'Data Scientist at TechCorp Chile',
+            'location': 'Santiago, Chile',
+            'connectionDegree': '2nd',
+            'profileImageUrl': 'https://media.licdn.com/dms/image/sample_image_1.jpg',
+            'skills_tags': 'python, data science, machine learning, analytics, SQL, pandas',
+            'summary': 'Data scientist with 5+ years experience in machine learning and analytics.',
+            'education': 'Master in Data Science - Universidad de Chile',
+            'current_company': 'TechCorp Chile',
+            'company': 'TechCorp Chile',
+            'companyUrl': 'https://linkedin.com/company/techcorp-chile',
+            'jobTitle': 'Data Scientist',
+            'jobDateRange': 'Jan 2022 - Present',
+            'school': 'Universidad de Chile',
+            'schoolDegree': 'Master in Data Science',
+            'schoolDateRange': '2019 - 2021',
+            'timestamp': timestamp,
+            'category': 'People',
+            'industry': 'Information Technology & Services'
+        },
+        {
+            'profileUrl': 'https://www.linkedin.com/in/marketing-specialist-chile/',
+            'fullName': 'María González Silva',
+            'firstName': 'María',
+            'lastName': 'González Silva',
+            'headline': 'Marketing Manager at Marketing Digital Chile',
+            'location': 'Valparaíso, Chile',
+            'connectionDegree': '2nd',
+            'profileImageUrl': 'https://media.licdn.com/dms/image/sample_image_2.jpg',
+            'skills_tags': 'marketing, digital marketing, social media, SEO, content strategy',
+            'summary': 'Marketing professional specialized in digital marketing and brand development.',
+            'education': 'MBA - Universidad Católica de Chile',
+            'current_company': 'Marketing Digital Chile',
+            'company': 'Marketing Digital Chile',
+            'companyUrl': 'https://linkedin.com/company/marketing-digital-chile',
+            'jobTitle': 'Marketing Manager',
+            'jobDateRange': 'Mar 2021 - Present',
+            'school': 'Universidad Católica de Chile',
+            'schoolDegree': 'MBA',
+            'schoolDateRange': '2018 - 2020',
+            'timestamp': timestamp,
+            'category': 'People',
+            'industry': 'Marketing and Advertising'
+        },
+        {
+            'profileUrl': 'https://www.linkedin.com/in/finance-analyst-chile/',
+            'fullName': 'Carlos Mendoza Rojas',
+            'firstName': 'Carlos',
+            'lastName': 'Mendoza Rojas',
+            'headline': 'Financial Analyst at Banco Santander Chile',
+            'location': 'Santiago, Chile',
+            'connectionDegree': '3rd',
+            'profileImageUrl': 'https://media.licdn.com/dms/image/sample_image_3.jpg',
+            'skills_tags': 'finance, accounting, financial analysis, Excel, SAP',
+            'summary': 'Financial analyst with experience in banking and financial services.',
+            'education': 'Magíster en Finanzas - Universidad de Chile',
+            'current_company': 'Banco Santander Chile',
+            'company': 'Banco Santander Chile',
+            'companyUrl': 'https://linkedin.com/company/banco-santander-chile',
+            'jobTitle': 'Financial Analyst',
+            'jobDateRange': 'Jun 2020 - Present',
+            'school': 'Universidad de Chile',
+            'schoolDegree': 'Magíster en Finanzas',
+            'schoolDateRange': '2017 - 2019',
+            'timestamp': timestamp,
+            'category': 'People',
+            'industry': 'Banking'
+        },
+        {
+            'profileUrl': 'https://www.linkedin.com/in/sales-executive-chile/',
+            'fullName': 'Roberto Silva Muñoz',
+            'firstName': 'Roberto',
+            'lastName': 'Silva Muñoz',
+            'headline': 'Sales Executive at Salesforce Chile',
+            'location': 'Santiago, Chile',
+            'connectionDegree': '2nd',
+            'profileImageUrl': 'https://media.licdn.com/dms/image/sample_image_4.jpg',
+            'skills_tags': 'sales, negotiation, CRM, business development, account management',
+            'summary': 'Sales executive with proven track record in B2B sales and account management.',
+            'education': 'Ingeniería Comercial - Universidad de Santiago',
+            'current_company': 'Salesforce Chile',
+            'company': 'Salesforce Chile',
+            'companyUrl': 'https://linkedin.com/company/salesforce',
+            'jobTitle': 'Sales Executive',
+            'jobDateRange': 'Sep 2021 - Present',
+            'school': 'Universidad de Santiago',
+            'schoolDegree': 'Ingeniería Comercial',
+            'schoolDateRange': '2015 - 2019',
+            'timestamp': timestamp,
+            'category': 'People',
+            'industry': 'Computer Software'
+        },
+        {
+            'profileUrl': 'https://www.linkedin.com/in/hr-specialist-chile/',
+            'fullName': 'Ana Herrera Castro',
+            'firstName': 'Ana',
+            'lastName': 'Herrera Castro',
+            'headline': 'HR Manager at TalentHub Chile',
+            'location': 'Santiago, Chile',
+            'connectionDegree': '2nd',
+            'profileImageUrl': 'https://media.licdn.com/dms/image/sample_image_5.jpg',
+            'skills_tags': 'human resources, recruitment, talent acquisition, HR analytics',
+            'summary': 'HR professional specialized in talent acquisition and development.',
+            'education': 'Psicología Organizacional - Universidad de Chile',
+            'current_company': 'TalentHub Chile',
+            'company': 'TalentHub Chile',
+            'companyUrl': 'https://linkedin.com/company/talenthub-chile',
+            'jobTitle': 'HR Manager',
+            'jobDateRange': 'Feb 2022 - Present',
+            'school': 'Universidad de Chile',
+            'schoolDegree': 'Psicología Organizacional',
+            'schoolDateRange': '2016 - 2020',
+            'timestamp': timestamp,
+            'category': 'People',
+            'industry': 'Human Resources'
+        }
+    ]
+    
+    # Combine existing data with enrichments
+    for i, entry in enumerate(existing_data):
+        enriched_entry = entry.copy()
+        # Apply enrichment data in a round-robin fashion
+        enrichment = enrichments[i % len(enrichments)]
+        
+        # Only add enrichment data if fields are empty
+        for key, value in enrichment.items():
+            if key not in enriched_entry or not enriched_entry[key]:
+                enriched_entry[key] = value
+        
+        enriched_data.append(enriched_entry)
+    
+    return enriched_data
+
 # Function to process uploaded file
 def process_uploaded_file(uploaded_file):
     """Process uploaded CSV or Excel file"""
@@ -565,7 +769,7 @@ with tab1:
             if status == "completed":
                 # Job completed successfully
                 progress_bar.progress(100)
-                status_container.success("✅ Data enrichment completed successfully!")
+                status_container.success("✅ Data enrichment job completed!")
                 
                 # Show what happens next
                 st.info("📊 Data has been enriched in your Google Sheet. The following steps are happening:")
@@ -577,15 +781,65 @@ with tab1:
                 
                 # Actually refresh the data
                 updated_data = get_sheet_data()
+                
+                # Check if data is actually enriched
+                is_enriched = check_if_data_enriched(updated_data)
+                
+                if not is_enriched:
+                    st.warning("⚠️ The data doesn't appear to be fully enriched.")
+                    
+                    with st.expander("Why is my data not enriched?"):
+                        st.write("""
+                        There are several possible reasons:
+                        
+                        1. **Data is only in Google Sheet**: The enrichment process writes data directly to your Google Sheet, 
+                           but it may take some time to appear in the app. Try clicking "Load Current Data" after a few minutes.
+                           
+                        2. **Limited LinkedIn access**: The enrichment process may be limited by LinkedIn's restrictions or 
+                           if profiles are private/have limited information.
+                           
+                        3. **API limitations**: There might be rate limits or other restrictions on the data enrichment API.
+                        
+                        4. **Processing delay**: The data may still be processing in the background.
+                        """)
+                    
+                    # Show options for the user
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        if st.button("Refresh data from Google Sheet"):
+                            with st.spinner("Reloading data from Google Sheet..."):
+                                time.sleep(2)  # Brief pause for UX
+                                updated_data = get_sheet_data()
+                                is_enriched = check_if_data_enriched(updated_data)
+                                if is_enriched:
+                                    st.success("✅ Successfully loaded enriched data!")
+                                else:
+                                    st.info("Data loaded, but still appears to be missing enrichment")
+                    
+                    with col2:
+                        if st.button("Use demo enriched data instead"):
+                            updated_data = get_demo_enriched_data(updated_data)
+                            st.success("✅ Demo enriched data loaded!")
+                            st.info("This is sample data for demonstration purposes only")
+                
                 st.session_state.candidates = updated_data
                 
                 # Show success message with counts
                 if updated_data:
-                    st.success(f"✅ Successfully loaded {len(updated_data)} candidates with enriched data!")
+                    st.success(f"✅ Successfully loaded {len(updated_data)} candidates!")
                     
                     # Show a preview of the enriched data
                     with st.expander("Preview of enriched data"):
-                        st.dataframe(pd.DataFrame(updated_data[:5]))
+                        df = pd.DataFrame(updated_data[:5])
+                        # Highlight empty cells to make it obvious what's missing
+                        def highlight_missing(val):
+                            if val == '' or val is None:
+                                return 'background-color: #ffcccc'
+                            return ''
+                        
+                        styled_df = df.style.applymap(highlight_missing)
+                        st.dataframe(styled_df)
                 
                 break
                 
@@ -653,7 +907,7 @@ with tab2:
                 
                 # If still no data, use demo data
                 if not candidates:
-                    # Demo data
+                    # Demo data with rich enrichment
                     candidates = [
                         {
                             'name': 'Carlos Mendoza',
@@ -662,7 +916,10 @@ with tab2:
                             'current_company': 'Banco Santander Chile',
                             'education': 'Magíster en Finanzas - Universidad de Chile',
                             'linkedin_url': 'https://linkedin.com/in/carlos-mendoza',
-                            'skills_tags': 'finanzas, análisis'
+                            'skills_tags': 'finanzas, análisis financiero, Excel, SAP, modelamiento financiero, riesgo',
+                            'summary': 'Analista financiero con experiencia en banca y servicios financieros. Especialista en modelamiento financiero y evaluación de riesgos.',
+                            'source': 'LinkedIn',
+                            'ingested_at': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                         },
                         {
                             'name': 'María González',
@@ -671,7 +928,10 @@ with tab2:
                             'current_company': 'StartupTech Chile',
                             'education': 'Ingeniería Comercial - PUCV',
                             'linkedin_url': 'https://linkedin.com/in/maria-gonzalez',
-                            'skills_tags': 'marketing, digital'
+                            'skills_tags': 'marketing digital, SEO, SEM, redes sociales, content marketing, analytics',
+                            'summary': 'Profesional de marketing especializada en marketing digital y desarrollo de marca para empresas tecnológicas en LATAM.',
+                            'source': 'LinkedIn',
+                            'ingested_at': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                         },
                         {
                             'name': 'Diego Ramírez',
@@ -680,7 +940,10 @@ with tab2:
                             'current_company': 'TechCorp Chile',
                             'education': 'Ingeniería Informática - Universidad de Concepción',
                             'linkedin_url': 'https://linkedin.com/in/diego-ramirez',
-                            'skills_tags': 'tecnología, análisis'
+                            'skills_tags': 'python, R, machine learning, data analysis, SQL, tensorflow, data visualization',
+                            'summary': 'Científico de datos con 5+ años de experiencia en machine learning y análisis de datos. Experiencia en Python, SQL y visualización de datos.',
+                            'source': 'LinkedIn',
+                            'ingested_at': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                         },
                         {
                             'name': 'Ana Herrera',
@@ -689,7 +952,10 @@ with tab2:
                             'current_company': 'EY Chile',
                             'education': 'Contador Auditor - Universidad de Chile',
                             'linkedin_url': 'https://linkedin.com/in/ana-herrera',
-                            'skills_tags': 'contabilidad, auditoría'
+                            'skills_tags': 'contabilidad, auditoría, IFRS, tributación, Excel, SAP',
+                            'summary': 'Contadora con experiencia en auditoría y consultoría financiera. Especialista en normativa IFRS y tributación chilena.',
+                            'source': 'LinkedIn',
+                            'ingested_at': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                         },
                         {
                             'name': 'Roberto Silva',
@@ -698,7 +964,10 @@ with tab2:
                             'current_company': 'Minera Escondida',
                             'education': 'Ingeniería Industrial - Universidad Católica del Norte',
                             'linkedin_url': 'https://linkedin.com/in/roberto-silva',
-                            'skills_tags': 'ventas, minería'
+                            'skills_tags': 'ventas, minería, negociación, desarrollo de negocios, CRM, gestión de cuentas',
+                            'summary': 'Ejecutivo de ventas con trayectoria comprobada en ventas B2B y gestión de cuentas en el sector minero.',
+                            'source': 'LinkedIn',
+                            'ingested_at': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                         }
                     ]
             
