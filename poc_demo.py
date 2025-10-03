@@ -192,24 +192,24 @@ def validate_and_fix_linkedin_urls(data):
     for row in data:
         fixed_row = row.copy()
         
-        # Check if profileUrl exists and is valid
-        profile_url = row.get('profileUrl', '')
+        # Check if Profile Url exists and is valid (using the correct column name)
+        profile_url = row.get('Profile Url', '')
         
-        # If profileUrl is not a valid LinkedIn URL
+        # If Profile Url is not a valid LinkedIn URL
         if not profile_url or 'linkedin.com/in/' not in profile_url.lower():
             # Try to find a name to construct a URL
             name = None
             
             # Check various fields for a name
-            if 'fullName' in row and row['fullName']:
-                name = row['fullName']
+            if 'Full Name' in row and row['Full Name']:
+                name = row['Full Name']
+            elif 'First Name' in row and row['First Name']:
+                if 'Last Name' in row and row['Last Name']:
+                    name = f"{row['First Name']} {row['Last Name']}"
+                else:
+                    name = row['First Name']
             elif 'name' in row and row['name']:
                 name = row['name']
-            elif 'firstName' in row and row['firstName']:
-                if 'lastName' in row and row['lastName']:
-                    name = f"{row['firstName']} {row['lastName']}"
-                else:
-                    name = row['firstName']
             
             # If we found a name, try to construct a URL
             if name:
@@ -219,8 +219,8 @@ def validate_and_fix_linkedin_urls(data):
                 import re
                 url_name = re.sub(r'[^a-z0-9-]', '', url_name)
                 # Construct URL
-                fixed_row['profileUrl'] = f"https://www.linkedin.com/in/{url_name}/"
-                print(f"Fixed LinkedIn URL: {fixed_row['profileUrl']} (from {profile_url})")
+                fixed_row['Profile Url'] = f"https://www.linkedin.com/in/{url_name}/"
+                print(f"Fixed LinkedIn URL: {fixed_row['Profile Url']} (from {profile_url})")
             else:
                 # If we can't construct a URL, skip this row
                 print(f"Skipping row with invalid LinkedIn URL: {profile_url}")
@@ -254,24 +254,24 @@ def write_to_sheet(data):
         
         # Define the expected column order based on actual PhantomBuster LinkedIn Profile Scraper output
         expected_columns = [
-            "profileUrl", "error", "refreshedAt", "scraperProfileId", "scraperFullName",
-            "companyIndustry", "companyName", "companyWebsite", "firstName", "lastName",
-            "linkedinCompanyUrl", "linkedinCompanySlug", "linkedinCompanyId", "linkedinDescription",
-            "linkedinHeadline", "linkedinIsHiringBadge", "linkedinIsOpenToWorkBadge",
-            "linkedinJobDateRange", "linkedinJobDescription", "linkedinJobLocation",
-            "linkedinJobTitle", "linkedinPreviousCompanySlug", "linkedinPreviousJobDateRange",
-            "linkedinPreviousJobLocation", "linkedinPreviousJobTitle", "linkedinProfileId",
-            "linkedinProfileSlug", "linkedinProfileUrl", "linkedinProfileUrn",
-            "linkedinProfileImageUrn", "linkedinProfileImageUrl", "linkedinSchoolDateRange",
-            "linkedinSchoolDegree", "linkedinSkillsLabel", "location", "previousCompanyName",
-            "professionalEmail", "mutualConnectionsUrl", "connectionsUrl", "linkedinCompanyName",
-            "linkedinCompanyDescription", "linkedinCompanyTagline", "linkedinCompanyFollowerCount",
-            "linkedinCompanyWebsite", "linkedinCompanyEmployeesCount", "linkedinCompanySize",
-            "linkedinCompanyHeadquarter", "linkedinCompanyIndustry", "linkedinCompanyFounded",
-            "linkedinCompanySpecialities", "linkedinSchoolDescription", "linkedinSchoolUrl",
-            "linkedinSchoolCompanySlug", "linkedinSchoolName", "linkedinPreviousSchoolUrl",
-            "linkedinPreviousSchoolCompanySlug", "linkedinPreviousSchoolDateRange",
-            "linkedinPreviousSchoolDegree", "linkedinPreviousSchoolName", "linkedinPreviousJobDescription"
+            "Profile Url", "Error", "Refreshed At", "Scraper Profile Id", "Scraper Full Name",
+            "Company Industry", "Company Name", "Company Website", "First Name", "Last Name",
+            "Linkedin Company Url", "Linkedin Company Slug", "Linkedin Company Id", "Linkedin Description",
+            "Linkedin Headline", "Linkedin Is Hiring Badge", "Linkedin Is Open To Work Badge",
+            "Linkedin Job Date Range", "Linkedin Job Description", "Linkedin Job Location",
+            "Linkedin Job Title", "Linkedin Previous Company Slug", "Linkedin Previous Job Date Range",
+            "Linkedin Previous Job Location", "Linkedin Previous Job Title", "Linkedin Profile Id",
+            "Linkedin Profile Slug", "Linkedin Profile Url", "Linkedin Profile Urn",
+            "Linkedin Profile Image Urn", "Linkedin Profile Image Url", "Linkedin School Date Range",
+            "Linkedin School Degree", "Linkedin Skills Label", "Location", "Previous Company Name",
+            "Professional Email", "Mutual Connections Url", "Connections Url", "Linkedin Company Name",
+            "Linkedin Company Description", "Linkedin Company Tagline", "Linkedin Company Follower Count",
+            "Linkedin Company Website", "Linkedin Company Employees Count", "Linkedin Company Size",
+            "Linkedin Company Headquarter", "Linkedin Company Industry", "Linkedin Company Founded",
+            "Linkedin Company Specialities", "Linkedin School Description", "Linkedin School Url",
+            "Linkedin School Company Slug", "Linkedin School Name", "Linkedin Previous School Url",
+            "Linkedin Previous School Company Slug", "Linkedin Previous School Date Range",
+            "Linkedin Previous School Degree", "Linkedin Previous School Name", "Linkedin Previous Job Description"
         ]
         
         # Debug log - print what we're about to write to the sheet
@@ -303,10 +303,12 @@ def write_to_sheet(data):
             
             # For each expected column, try to find the corresponding value in our data
             for column in headers:
-                # Special handling for linkedin_url -> profileUrl mapping
-                if column == "profileUrl":
+                # Special handling for linkedin_url -> Profile Url mapping
+                if column == "Profile Url":
                     # Try multiple possible field names for LinkedIn URL
-                    if "profileUrl" in row:
+                    if "Profile Url" in row:
+                        mapped_row.append(row.get("Profile Url", ""))
+                    elif "profileUrl" in row:
                         mapped_row.append(row.get("profileUrl", ""))
                     elif "linkedin_url" in row:
                         mapped_row.append(row.get("linkedin_url", ""))
@@ -315,9 +317,11 @@ def write_to_sheet(data):
                     else:
                         mapped_row.append("")
                 
-                # Special handling for name -> fullName mapping
-                elif column == "fullName":
-                    if "fullName" in row:
+                # Special handling for name -> Full Name mapping
+                elif column == "Full Name":
+                    if "Full Name" in row:
+                        mapped_row.append(row.get("Full Name", ""))
+                    elif "fullName" in row:
                         mapped_row.append(row.get("fullName", ""))
                     elif "name" in row:
                         mapped_row.append(row.get("name", ""))
@@ -373,7 +377,7 @@ def launch_enricher_job(urls=None, query=None, limit=5):
                 # LinkedIn Profile Scraper default config
                 agent_config = {
                     "spreadsheetUrl": f"https://docs.google.com/spreadsheets/d/{SHEET_ID}",
-                    "columnName": "profileUrl",  # FIXED: Use profileUrl instead of linkedin_url
+                    "columnName": "Profile Url",  # CRITICAL: Use "Profile Url" with space and capital letters
                     "numberOfProfilesPerLaunch": limit
                 }
             elif query:
@@ -389,7 +393,7 @@ def launch_enricher_job(urls=None, query=None, limit=5):
             agent_config["spreadsheetUrl"] = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}"
             
             if urls:
-                agent_config["columnName"] = "profileUrl"  # FIXED: Use profileUrl instead of linkedin_url
+                agent_config["columnName"] = "Profile Url"  # CRITICAL: Use "Profile Url" with space and capital letters
                 if "numberOfProfilesPerLaunch" in agent_config:
                     agent_config["numberOfProfilesPerLaunch"] = limit
                 else:
@@ -1428,13 +1432,13 @@ with tab2:
             
             # Define field mappings for both old and new formats
             field_mappings = {
-                'education': ['education', 'linkedinSchoolDegree', 'linkedinSchoolName'],
-                'headline': ['headline', 'linkedinHeadline'],
-                'skills': ['skills_tags', 'linkedinSkillsLabel'],
-                'company': ['current_company', 'company', 'companyName', 'linkedinCompanyName'],
-                'location': ['location', 'linkedinJobLocation'],
-                'description': ['summary', 'linkedinDescription', 'linkedinJobDescription'],
-                'job_title': ['jobTitle', 'linkedinJobTitle']
+                'education': ['education', 'Linkedin School Degree', 'Linkedin School Name'],
+                'headline': ['headline', 'Linkedin Headline'],
+                'skills': ['skills_tags', 'Linkedin Skills Label'],
+                'company': ['current_company', 'company', 'Company Name', 'Linkedin Company Name'],
+                'location': ['Location', 'Linkedin Job Location'],
+                'description': ['summary', 'Linkedin Description', 'Linkedin Job Description'],
+                'job_title': ['jobTitle', 'Linkedin Job Title']
             }
             
             # Simple filtering logic based on the search term
@@ -1499,33 +1503,33 @@ with tab2:
                 match_percentage = min(int(score * 20), 95)  # Convert score to percentage, max 95%
                 
                 # Get name from various possible fields
-                name = candidate.get('fullName', candidate.get('firstName', ''))
-                if not name and 'firstName' in candidate:
-                    name = f"{candidate.get('firstName', '')} {candidate.get('lastName', '')}"
+                name = candidate.get('Full Name', candidate.get('First Name', ''))
+                if not name and 'First Name' in candidate:
+                    name = f"{candidate.get('First Name', '')} {candidate.get('Last Name', '')}"
                 if not name:
                     name = "Unknown"
                     
                 # Get headline from various possible fields
-                headline = candidate.get('linkedinHeadline', candidate.get('headline', 'No headline'))
+                headline = candidate.get('Linkedin Headline', candidate.get('headline', 'No headline'))
                 
                 with st.expander(f"{name} - {headline}"):
                     col1, col2 = st.columns([2,1])
                     
                     with col1:
                         # Company info
-                        company = candidate.get('companyName', candidate.get('linkedinCompanyName', 
+                        company = candidate.get('Company Name', candidate.get('Linkedin Company Name', 
                                   candidate.get('current_company', '')))
                         if company:
                             st.write(f"**Company:** {company}")
                             
                             # Company industry
-                            industry = candidate.get('companyIndustry', candidate.get('linkedinCompanyIndustry', ''))
+                            industry = candidate.get('Company Industry', candidate.get('Linkedin Company Industry', ''))
                             if industry:
                                 st.write(f"**Industry:** {industry}")
                         
                         # Job title
-                        job_title = candidate.get('linkedinJobTitle', candidate.get('jobTitle', ''))
-                        job_date = candidate.get('linkedinJobDateRange', '')
+                        job_title = candidate.get('Linkedin Job Title', candidate.get('jobTitle', ''))
+                        job_date = candidate.get('Linkedin Job Date Range', '')
                         if job_title:
                             job_info = f"**Job:** {job_title}"
                             if job_date:
@@ -1533,13 +1537,13 @@ with tab2:
                             st.write(job_info)
                         
                         # Location
-                        location = candidate.get('location', candidate.get('linkedinJobLocation', ''))
+                        location = candidate.get('Location', candidate.get('Linkedin Job Location', ''))
                         if location:
                             st.write(f"**Location:** {location}")
                         
                         # Education
-                        education = candidate.get('linkedinSchoolDegree', candidate.get('education', ''))
-                        school = candidate.get('linkedinSchoolName', '')
+                        education = candidate.get('Linkedin School Degree', candidate.get('education', ''))
+                        school = candidate.get('Linkedin School Name', '')
                         if education or school:
                             edu_info = "**Education:** "
                             if education and school:
@@ -1551,12 +1555,12 @@ with tab2:
                             st.write(edu_info)
                         
                         # Skills
-                        skills = candidate.get('linkedinSkillsLabel', candidate.get('skills_tags', ''))
+                        skills = candidate.get('Linkedin Skills Label', candidate.get('skills_tags', ''))
                         if skills:
                             st.write(f"**Skills:** {skills}")
                             
                         # Email
-                        email = candidate.get('professionalEmail', '')
+                        email = candidate.get('Professional Email', '')
                         if email:
                             st.write(f"**Email:** {email}")
                     
@@ -1564,12 +1568,12 @@ with tab2:
                         st.write(f"**Match:** {match_percentage}%")
                         
                         # Profile image
-                        img_url = candidate.get('linkedinProfileImageUrl', '')
+                        img_url = candidate.get('Linkedin Profile Image Url', '')
                         if img_url:
                             st.image(img_url, width=100)
                         
                         # LinkedIn link
-                        linkedin_url = candidate.get('profileUrl', candidate.get('linkedinProfileUrl', ''))
+                        linkedin_url = candidate.get('Profile Url', candidate.get('Linkedin Profile Url', ''))
                         if linkedin_url:
                             st.markdown(f"[View LinkedIn]({linkedin_url})")
                         
@@ -1578,7 +1582,7 @@ with tab2:
                         st.markdown(f"[View in Sheet]({sheet_url})")
                         
                         # Last updated
-                        refreshed = candidate.get('refreshedAt', '')
+                        refreshed = candidate.get('Refreshed At', '')
                         if refreshed:
                             st.caption(f"Last updated: {refreshed}")
 
@@ -1598,18 +1602,18 @@ with tab3:
         
         # Organize columns into categories for better viewing
         column_categories = {
-            "Basic Info": ["profileUrl", "firstName", "lastName", "linkedinHeadline", "location", 
-                          "linkedinProfileImageUrl", "professionalEmail"],
-            "Company Info": ["companyName", "companyIndustry", "companyWebsite", "linkedinCompanyName",
-                           "linkedinCompanyUrl", "linkedinCompanyDescription"],
-            "Job Info": ["linkedinJobTitle", "linkedinJobDateRange", "linkedinJobLocation", 
-                        "linkedinJobDescription", "linkedinPreviousJobTitle", 
-                        "linkedinPreviousJobDateRange", "linkedinPreviousJobDescription"],
-            "Education": ["linkedinSchoolName", "linkedinSchoolDegree", "linkedinSchoolDateRange",
-                         "linkedinPreviousSchoolName", "linkedinPreviousSchoolDegree", 
-                         "linkedinPreviousSchoolDateRange"],
-            "Skills & Details": ["linkedinSkillsLabel", "linkedinDescription"],
-            "Metadata": ["refreshedAt", "scraperProfileId", "scraperFullName", "error"]
+            "Basic Info": ["Profile Url", "First Name", "Last Name", "Linkedin Headline", "Location", 
+                          "Linkedin Profile Image Url", "Professional Email"],
+            "Company Info": ["Company Name", "Company Industry", "Company Website", "Linkedin Company Name",
+                           "Linkedin Company Url", "Linkedin Company Description"],
+            "Job Info": ["Linkedin Job Title", "Linkedin Job Date Range", "Linkedin Job Location", 
+                        "Linkedin Job Description", "Linkedin Previous Job Title", 
+                        "Linkedin Previous Job Date Range", "Linkedin Previous Job Description"],
+            "Education": ["Linkedin School Name", "Linkedin School Degree", "Linkedin School Date Range",
+                         "Linkedin Previous School Name", "Linkedin Previous School Degree", 
+                         "Linkedin Previous School Date Range"],
+            "Skills & Details": ["Linkedin Skills Label", "Linkedin Description"],
+            "Metadata": ["Refreshed At", "Scraper Profile Id", "Scraper Full Name", "Error"]
         }
         
         # Create tabs for each category

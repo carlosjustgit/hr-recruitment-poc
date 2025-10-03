@@ -1,0 +1,14 @@
+{
+  "numberOfAddsPerLaunch": 10,
+  "enrichWithCompanyData": true,
+  "pushResultToCRM": true,
+  "spreadsheetUrl": "https://docs.google.com/spreadsheets/d/12Wp7WSecBTDn1bwb-phv5QN6JEC8vpztgs_tK5_fMdQ/edit?usp=sharing",
+  "identities": [
+    {
+      "identityId": "2540688382119374",
+      "sessionCookie": "AQEDAQIz2iQB2px0AAABmXZj66kAAAGZv9QVfFYAY2195-hn04on5tSbhyMAGBM0zAaXxgTJa5ruOr_BgGwwrIiAJVnQDmeFd_qVXlYm5-LrgFxBDu-rO2YZTnU8UxycwmKmqvipU62mCtq1sp_8z8zC",
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36 Edg/140.0.0.0"
+    }
+  ],
+  "emailChooser": "phantombuster"
+}
