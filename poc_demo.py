@@ -247,63 +247,69 @@ def write_to_sheet(data):
         )
         service = build('sheets', 'v4', credentials=credentials)
         
-        # First clear existing data
-        clear_result = clear_sheet()
-        if not clear_result:
-            st.warning("Could not clear previous data, will append new data")
+        # First check if the worksheet exists
+        try:
+            # Get sheet metadata
+            sheet_metadata = service.spreadsheets().get(spreadsheetId=SHEET_ID).execute()
+            sheets = sheet_metadata.get('sheets', '')
+            
+            # Check if "candidatos" worksheet exists
+            worksheet_exists = False
+            for sheet in sheets:
+                if sheet.get("properties", {}).get("title") == "candidatos":
+                    worksheet_exists = True
+                    break
+            
+            if not worksheet_exists:
+                # Create the worksheet if it doesn't exist
+                requests = [{
+                    'addSheet': {
+                        'properties': {
+                            'title': 'candidatos'
+                        }
+                    }
+                }]
+                service.spreadsheets().batchUpdate(
+                    spreadsheetId=SHEET_ID,
+                    body={'requests': requests}
+                ).execute()
+                st.info("Created 'candidatos' worksheet as it didn't exist")
+        except Exception as e:
+            st.warning(f"Error checking/creating worksheet: {e}")
+            # Continue anyway
         
-        # Define the expected column order based on actual PhantomBuster LinkedIn Profile Scraper output
-        expected_columns = [
-            "Profile Url", "Error", "Refreshed At", "Scraper Profile Id", "Scraper Full Name",
-            "Company Industry", "Company Name", "Company Website", "First Name", "Last Name",
-            "Linkedin Company Url", "Linkedin Company Slug", "Linkedin Company Id", "Linkedin Description",
-            "Linkedin Headline", "Linkedin Is Hiring Badge", "Linkedin Is Open To Work Badge",
-            "Linkedin Job Date Range", "Linkedin Job Description", "Linkedin Job Location",
-            "Linkedin Job Title", "Linkedin Previous Company Slug", "Linkedin Previous Job Date Range",
-            "Linkedin Previous Job Location", "Linkedin Previous Job Title", "Linkedin Profile Id",
-            "Linkedin Profile Slug", "Linkedin Profile Url", "Linkedin Profile Urn",
-            "Linkedin Profile Image Urn", "Linkedin Profile Image Url", "Linkedin School Date Range",
-            "Linkedin School Degree", "Linkedin Skills Label", "Location", "Previous Company Name",
-            "Professional Email", "Mutual Connections Url", "Connections Url", "Linkedin Company Name",
-            "Linkedin Company Description", "Linkedin Company Tagline", "Linkedin Company Follower Count",
-            "Linkedin Company Website", "Linkedin Company Employees Count", "Linkedin Company Size",
-            "Linkedin Company Headquarter", "Linkedin Company Industry", "Linkedin Company Founded",
-            "Linkedin Company Specialities", "Linkedin School Description", "Linkedin School Url",
-            "Linkedin School Company Slug", "Linkedin School Name", "Linkedin Previous School Url",
-            "Linkedin Previous School Company Slug", "Linkedin Previous School Date Range",
-            "Linkedin Previous School Degree", "Linkedin Previous School Name", "Linkedin Previous Job Description"
-        ]
+        # Clear the sheet
+        try:
+            clear_range = "candidatos!A1:ZZ1000"  # Broader range
+            result = service.spreadsheets().values().clear(
+                spreadsheetId=SHEET_ID,
+                range=clear_range,
+                body={}
+            ).execute()
+            
+            cleared_range = result.get('clearedRange', '')
+            st.info(f"Successfully cleared data from {cleared_range}")
+        except Exception as e:
+            st.warning(f"Error clearing sheet: {e}")
+            # Continue anyway
+        
+        # Define the MINIMAL column set needed for PhantomBuster
+        # Using just what we need for the LinkedIn Profile Scraper
+        minimal_columns = ["Profile Url", "First Name", "Last Name"]
         
         # Debug log - print what we're about to write to the sheet
         print(f"Data to write to sheet: {data[:2]}")
         
-        # Check if the sheet has headers
-        sheet_range = "candidatos!A1:Z1"
-        result = service.spreadsheets().values().get(
-            spreadsheetId=SHEET_ID,
-            range=sheet_range
-        ).execute()
-        
-        existing_headers = result.get('values', [[]])[0]
-        
-        # If no headers exist or they don't match what we expect, create new headers
-        if not existing_headers:
-            headers = expected_columns
-        else:
-            # Use existing headers, but ensure they're in the right order
-            headers = existing_headers
-        
-        # ALWAYS use our expected columns to ensure proper structure
-        headers = expected_columns
-        values = [headers]  # First row is headers
+        # Prepare rows for writing
+        values = [minimal_columns]  # First row is headers
         
         for row in data:
             # Create a row with the correct column mapping
             mapped_row = []
             
             # For each expected column, try to find the corresponding value in our data
-            for column in headers:
-                # Special handling for linkedin_url -> Profile Url mapping
+            for column in minimal_columns:
+                # Special handling for LinkedIn URL mapping
                 if column == "Profile Url":
                     # Try multiple possible field names for LinkedIn URL
                     if "Profile Url" in row:
@@ -317,14 +323,32 @@ def write_to_sheet(data):
                     else:
                         mapped_row.append("")
                 
-                # Special handling for name -> Full Name mapping
-                elif column == "Full Name":
-                    if "Full Name" in row:
-                        mapped_row.append(row.get("Full Name", ""))
-                    elif "fullName" in row:
-                        mapped_row.append(row.get("fullName", ""))
-                    elif "name" in row:
-                        mapped_row.append(row.get("name", ""))
+                # Special handling for name mapping
+                elif column == "First Name":
+                    if "First Name" in row:
+                        mapped_row.append(row.get("First Name", ""))
+                    elif "firstName" in row:
+                        mapped_row.append(row.get("firstName", ""))
+                    elif "name" in row and " " in row["name"]:
+                        # Split name into first and last
+                        name_parts = row["name"].split(" ", 1)
+                        mapped_row.append(name_parts[0])
+                    else:
+                        mapped_row.append("")
+                
+                # Special handling for last name
+                elif column == "Last Name":
+                    if "Last Name" in row:
+                        mapped_row.append(row.get("Last Name", ""))
+                    elif "lastName" in row:
+                        mapped_row.append(row.get("lastName", ""))
+                    elif "name" in row and " " in row["name"]:
+                        # Split name into first and last
+                        name_parts = row["name"].split(" ", 1)
+                        if len(name_parts) > 1:
+                            mapped_row.append(name_parts[1])
+                        else:
+                            mapped_row.append("")
                     else:
                         mapped_row.append("")
                 
@@ -336,25 +360,24 @@ def write_to_sheet(data):
             
         # Debug log to show the first row of data
         if len(values) > 1:
-            print(f"First row being written to sheet: {values[1][:5]}")  # Show first 5 columns
-        
-        # Clear the sheet and write the new data
-        service.spreadsheets().values().clear(
-            spreadsheetId=SHEET_ID,
-            range="candidatos!A1:Z1000",
-            body={}
-        ).execute()
+            print(f"First row being written to sheet: {values[1]}")
         
         # Write headers and data
         body = {'values': values}
-        service.spreadsheets().values().update(
+        result = service.spreadsheets().values().update(
             spreadsheetId=SHEET_ID,
             range="candidatos!A1",
             valueInputOption='RAW',
             body=body
         ).execute()
         
+        # Debug info
+        print(f"Updated range: {result.get('updatedRange')}")
+        print(f"Updated rows: {result.get('updatedRows')}")
+        print(f"Updated cells: {result.get('updatedCells')}")
+        
         st.session_state.last_update = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        st.success(f"Successfully wrote {len(values)-1} contacts to spreadsheet!")
         return True
         
     except Exception as e:
