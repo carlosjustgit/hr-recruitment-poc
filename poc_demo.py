@@ -118,15 +118,67 @@ def clear_sheet():
         )
         service = build('sheets', 'v4', credentials=credentials)
         
-        # Clear the entire worksheet except header row
-        clear_range = "candidatos!A2:Z1000"  # Adjust range as needed
-        service.spreadsheets().values().clear(
-            spreadsheetId=SHEET_ID,
-            range=clear_range,
-            body={}
-        ).execute()
+        # First check if the worksheet exists
+        try:
+            # Get sheet metadata
+            sheet_metadata = service.spreadsheets().get(spreadsheetId=SHEET_ID).execute()
+            sheets = sheet_metadata.get('sheets', '')
+            
+            # Check if "candidatos" worksheet exists
+            worksheet_exists = False
+            for sheet in sheets:
+                if sheet.get("properties", {}).get("title") == "candidatos":
+                    worksheet_exists = True
+                    break
+            
+            if not worksheet_exists:
+                # Create the worksheet if it doesn't exist
+                requests = [{
+                    'addSheet': {
+                        'properties': {
+                            'title': 'candidatos'
+                        }
+                    }
+                }]
+                service.spreadsheets().batchUpdate(
+                    spreadsheetId=SHEET_ID,
+                    body={'requests': requests}
+                ).execute()
+                st.info("Created 'candidatos' worksheet as it didn't exist")
+                return True  # No need to clear a newly created sheet
         
-        return True
+        except Exception as e:
+            st.warning(f"Error checking/creating worksheet: {e}")
+            # Continue anyway
+        
+        # Clear the entire worksheet except header row
+        try:
+            clear_range = "candidatos!A2:Z1000"  # Adjust range as needed
+            result = service.spreadsheets().values().clear(
+                spreadsheetId=SHEET_ID,
+                range=clear_range,
+                body={}
+            ).execute()
+            
+            # Debug info
+            cleared_range = result.get('clearedRange', '')
+            st.info(f"✅ Successfully cleared data from {cleared_range}")
+            return True
+            
+        except HttpError as e:
+            if "Unable to parse range" in str(e):
+                st.warning("Worksheet exists but range format issue. Creating default headers.")
+                # Add default headers
+                headers = ["name", "email", "phone", "linkedin_url", "company", "position", "location"]
+                service.spreadsheets().values().update(
+                    spreadsheetId=SHEET_ID,
+                    range="candidatos!A1",
+                    valueInputOption="RAW",
+                    body={'values': [headers]}
+                ).execute()
+                return True
+            else:
+                raise e
         
     except Exception as e:
         st.error(f"Error clearing sheet: {e}")
@@ -391,19 +443,39 @@ with tab1:
     # Actions
     col1, col2, col3 = st.columns(3)
     
+    # Initialize confirmation state
+    if 'confirm_clear' not in st.session_state:
+        st.session_state.confirm_clear = False
+    
     with col1:
-        if st.button("Add to Spreadsheet (Clears Previous Data)", disabled=st.session_state.uploaded_data is None):
-            with st.spinner("Adding contacts to spreadsheet..."):
-                # Confirm with the user
-                st.warning("⚠️ This will clear all existing data in the spreadsheet and add the new contacts.")
-                if st.button("Confirm and Proceed"):
-                    success = write_to_sheet(st.session_state.uploaded_data)
-                    if success:
-                        st.success("✅ Previous data cleared and new contacts added to spreadsheet!")
-                        # Refresh data
-                        st.session_state.candidates = get_sheet_data()
-                    else:
-                        st.error("❌ Failed to add contacts to spreadsheet")
+        # First button - request confirmation
+        if not st.session_state.confirm_clear:
+            if st.button("Add to Spreadsheet (Clears Previous Data)", disabled=st.session_state.uploaded_data is None, key="add_btn"):
+                st.session_state.confirm_clear = True
+                st.rerun()
+        
+        # Show confirmation UI if needed
+        if st.session_state.confirm_clear:
+            st.warning("⚠️ This will clear all existing data in the spreadsheet and add the new contacts.")
+            
+            col1a, col1b = st.columns(2)
+            with col1a:
+                if st.button("✅ Confirm and Proceed", key="confirm_btn"):
+                    with st.spinner("Clearing previous data and adding new contacts..."):
+                        success = write_to_sheet(st.session_state.uploaded_data)
+                        if success:
+                            st.success("✅ Previous data cleared and new contacts added to spreadsheet!")
+                            # Refresh data
+                            st.session_state.candidates = get_sheet_data()
+                            # Reset confirmation state
+                            st.session_state.confirm_clear = False
+                        else:
+                            st.error("❌ Failed to add contacts to spreadsheet")
+            
+            with col1b:
+                if st.button("❌ Cancel", key="cancel_btn"):
+                    st.session_state.confirm_clear = False
+                    st.rerun()
     
     with col2:
         enricher_button = st.button("Enrich Data")
