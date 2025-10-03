@@ -27,7 +27,7 @@ st.set_page_config(page_title="HR Recruitment PoC", page_icon="🔍", layout="wi
 # Configuration
 SHEET_ID = "12Wp7WSecBTDn1bwb-phv5QN6JEC8vpztgs_tK5_fMdQ"
 DATA_ENRICHER_API_KEY = "1SROua2I62PpnUfCj52i0w3Dc3X50lRNZV1BFDA62LY"
-DATA_ENRICHER_AGENT_ID = "3192622034872375"
+DATA_ENRICHER_AGENT_ID = "686901552340687"  # Updated agent ID
 
 # Initialize session state
 if 'data_loaded' not in st.session_state:
@@ -449,8 +449,9 @@ def get_demo_enriched_data(existing_data):
     """Add demo enriched data to existing LinkedIn profiles"""
     enriched_data = []
     
-    # Sample enrichment data based on PhantomBuster format
+    # Sample enrichment data based on PhantomBuster format with ALL fields
     timestamp = datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+    search_query = "developers chile"
     
     enrichments = [
         {
@@ -458,120 +459,195 @@ def get_demo_enriched_data(existing_data):
             'fullName': 'Diego Ramírez Torres',
             'firstName': 'Diego',
             'lastName': 'Ramírez Torres',
-            'headline': 'Data Scientist at TechCorp Chile',
+            'headline': 'Data Scientist at TechCorp Chile | Machine Learning Expert',
+            'additionalInfo': 'Open to work opportunities in Data Science',
             'location': 'Santiago, Chile',
             'connectionDegree': '2nd',
             'profileImageUrl': 'https://media.licdn.com/dms/image/sample_image_1.jpg',
-            'skills_tags': 'python, data science, machine learning, analytics, SQL, pandas',
-            'summary': 'Data scientist with 5+ years experience in machine learning and analytics.',
-            'education': 'Master in Data Science - Universidad de Chile',
-            'current_company': 'TechCorp Chile',
+            'vmid': 'ACoAABcDEfGhIjKlMnOpQrS',
+            'query': search_query,
+            'category': 'People',
+            'timestamp': timestamp,
+            'sharedConnections': '3 mutual connections',
             'company': 'TechCorp Chile',
             'companyUrl': 'https://linkedin.com/company/techcorp-chile',
-            'jobTitle': 'Data Scientist',
+            'companySlug': 'techcorp-chile',
+            'companyId': '12345678',
+            'industry': 'Information Technology & Services',
+            'company2': 'DataInsights SA',
+            'companyUrl2': 'https://linkedin.com/company/datainsights-sa',
+            'jobTitle': 'Senior Data Scientist',
             'jobDateRange': 'Jan 2022 - Present',
+            'jobTitle2': 'Data Analyst',
+            'jobDateRange2': 'Mar 2019 - Dec 2021',
             'school': 'Universidad de Chile',
             'schoolDegree': 'Master in Data Science',
-            'schoolDateRange': '2019 - 2021',
-            'timestamp': timestamp,
-            'category': 'People',
-            'industry': 'Information Technology & Services'
+            'schoolDateRange': '2017 - 2019',
+            'school2': 'Universidad de Santiago',
+            'schoolDegree2': 'Bachelor in Computer Science',
+            'schoolDateRange2': '2013 - 2017',
+            'searchAccountFullName': 'Carlos Justino',
+            'searchAccountProfileId': '167317308',
+            'skills_tags': 'python, data science, machine learning, analytics, SQL, pandas',
+            'summary': 'Data scientist with 5+ years experience in machine learning and analytics.',
+            'current_company': 'TechCorp Chile',
+            'education': 'Master in Data Science - Universidad de Chile'
         },
         {
             'profileUrl': 'https://www.linkedin.com/in/marketing-specialist-chile/',
             'fullName': 'María González Silva',
             'firstName': 'María',
             'lastName': 'González Silva',
-            'headline': 'Marketing Manager at Marketing Digital Chile',
+            'headline': 'Marketing Manager at Marketing Digital Chile | Digital Strategy Expert',
+            'additionalInfo': 'Digital Marketing Specialist with focus on growth strategies',
             'location': 'Valparaíso, Chile',
             'connectionDegree': '2nd',
             'profileImageUrl': 'https://media.licdn.com/dms/image/sample_image_2.jpg',
-            'skills_tags': 'marketing, digital marketing, social media, SEO, content strategy',
-            'summary': 'Marketing professional specialized in digital marketing and brand development.',
-            'education': 'MBA - Universidad Católica de Chile',
-            'current_company': 'Marketing Digital Chile',
+            'vmid': 'ACoAABcDEfGhIjKlMnOpQrT',
+            'query': search_query,
+            'category': 'People',
+            'timestamp': timestamp,
+            'sharedConnections': '5 mutual connections',
             'company': 'Marketing Digital Chile',
             'companyUrl': 'https://linkedin.com/company/marketing-digital-chile',
+            'companySlug': 'marketing-digital-chile',
+            'companyId': '23456789',
+            'industry': 'Marketing and Advertising',
+            'company2': 'Agencia Creativa SpA',
+            'companyUrl2': 'https://linkedin.com/company/agencia-creativa-spa',
             'jobTitle': 'Marketing Manager',
             'jobDateRange': 'Mar 2021 - Present',
+            'jobTitle2': 'Digital Marketing Specialist',
+            'jobDateRange2': 'Jun 2018 - Feb 2021',
             'school': 'Universidad Católica de Chile',
             'schoolDegree': 'MBA',
             'schoolDateRange': '2018 - 2020',
-            'timestamp': timestamp,
-            'category': 'People',
-            'industry': 'Marketing and Advertising'
+            'school2': 'Universidad de Valparaíso',
+            'schoolDegree2': 'Bachelor in Communications',
+            'schoolDateRange2': '2014 - 2018',
+            'searchAccountFullName': 'Carlos Justino',
+            'searchAccountProfileId': '167317308',
+            'skills_tags': 'marketing, digital marketing, social media, SEO, content strategy',
+            'summary': 'Marketing professional specialized in digital marketing and brand development.',
+            'current_company': 'Marketing Digital Chile',
+            'education': 'MBA - Universidad Católica de Chile'
         },
         {
             'profileUrl': 'https://www.linkedin.com/in/finance-analyst-chile/',
             'fullName': 'Carlos Mendoza Rojas',
             'firstName': 'Carlos',
             'lastName': 'Mendoza Rojas',
-            'headline': 'Financial Analyst at Banco Santander Chile',
+            'headline': 'Financial Analyst at Banco Santander Chile | Risk Management Specialist',
+            'additionalInfo': 'CFA Level II Candidate',
             'location': 'Santiago, Chile',
             'connectionDegree': '3rd',
             'profileImageUrl': 'https://media.licdn.com/dms/image/sample_image_3.jpg',
-            'skills_tags': 'finance, accounting, financial analysis, Excel, SAP',
-            'summary': 'Financial analyst with experience in banking and financial services.',
-            'education': 'Magíster en Finanzas - Universidad de Chile',
-            'current_company': 'Banco Santander Chile',
+            'vmid': 'ACoAABcDEfGhIjKlMnOpQrU',
+            'query': search_query,
+            'category': 'People',
+            'timestamp': timestamp,
+            'sharedConnections': '2 mutual connections',
             'company': 'Banco Santander Chile',
             'companyUrl': 'https://linkedin.com/company/banco-santander-chile',
-            'jobTitle': 'Financial Analyst',
+            'companySlug': 'banco-santander-chile',
+            'companyId': '34567890',
+            'industry': 'Banking',
+            'company2': 'BBVA Chile',
+            'companyUrl2': 'https://linkedin.com/company/bbva-chile',
+            'jobTitle': 'Senior Financial Analyst',
             'jobDateRange': 'Jun 2020 - Present',
+            'jobTitle2': 'Financial Analyst',
+            'jobDateRange2': 'Aug 2017 - May 2020',
             'school': 'Universidad de Chile',
             'schoolDegree': 'Magíster en Finanzas',
             'schoolDateRange': '2017 - 2019',
-            'timestamp': timestamp,
-            'category': 'People',
-            'industry': 'Banking'
+            'school2': 'Universidad de Chile',
+            'schoolDegree2': 'Ingeniería Comercial',
+            'schoolDateRange2': '2012 - 2016',
+            'searchAccountFullName': 'Carlos Justino',
+            'searchAccountProfileId': '167317308',
+            'skills_tags': 'finance, accounting, financial analysis, Excel, SAP',
+            'summary': 'Financial analyst with experience in banking and financial services.',
+            'current_company': 'Banco Santander Chile',
+            'education': 'Magíster en Finanzas - Universidad de Chile'
         },
         {
             'profileUrl': 'https://www.linkedin.com/in/sales-executive-chile/',
             'fullName': 'Roberto Silva Muñoz',
             'firstName': 'Roberto',
             'lastName': 'Silva Muñoz',
-            'headline': 'Sales Executive at Salesforce Chile',
+            'headline': 'Sales Executive at Salesforce Chile | Enterprise Solutions Specialist',
+            'additionalInfo': 'Salesforce Certified Sales Cloud Consultant',
             'location': 'Santiago, Chile',
             'connectionDegree': '2nd',
             'profileImageUrl': 'https://media.licdn.com/dms/image/sample_image_4.jpg',
-            'skills_tags': 'sales, negotiation, CRM, business development, account management',
-            'summary': 'Sales executive with proven track record in B2B sales and account management.',
-            'education': 'Ingeniería Comercial - Universidad de Santiago',
-            'current_company': 'Salesforce Chile',
+            'vmid': 'ACoAABcDEfGhIjKlMnOpQrV',
+            'query': search_query,
+            'category': 'People',
+            'timestamp': timestamp,
+            'sharedConnections': '7 mutual connections',
             'company': 'Salesforce Chile',
             'companyUrl': 'https://linkedin.com/company/salesforce',
-            'jobTitle': 'Sales Executive',
+            'companySlug': 'salesforce',
+            'companyId': '45678901',
+            'industry': 'Computer Software',
+            'company2': 'Oracle Chile',
+            'companyUrl2': 'https://linkedin.com/company/oracle',
+            'jobTitle': 'Enterprise Sales Executive',
             'jobDateRange': 'Sep 2021 - Present',
+            'jobTitle2': 'Account Manager',
+            'jobDateRange2': 'Jan 2019 - Aug 2021',
             'school': 'Universidad de Santiago',
             'schoolDegree': 'Ingeniería Comercial',
             'schoolDateRange': '2015 - 2019',
-            'timestamp': timestamp,
-            'category': 'People',
-            'industry': 'Computer Software'
+            'school2': 'Universidad Adolfo Ibáñez',
+            'schoolDegree2': 'Diploma en Gestión Comercial',
+            'schoolDateRange2': '2020 - 2021',
+            'searchAccountFullName': 'Carlos Justino',
+            'searchAccountProfileId': '167317308',
+            'skills_tags': 'sales, negotiation, CRM, business development, account management',
+            'summary': 'Sales executive with proven track record in B2B sales and account management.',
+            'current_company': 'Salesforce Chile',
+            'education': 'Ingeniería Comercial - Universidad de Santiago'
         },
         {
             'profileUrl': 'https://www.linkedin.com/in/hr-specialist-chile/',
             'fullName': 'Ana Herrera Castro',
             'firstName': 'Ana',
             'lastName': 'Herrera Castro',
-            'headline': 'HR Manager at TalentHub Chile',
+            'headline': 'HR Manager at TalentHub Chile | Talent Acquisition Specialist',
+            'additionalInfo': 'SHRM Certified Professional',
             'location': 'Santiago, Chile',
             'connectionDegree': '2nd',
             'profileImageUrl': 'https://media.licdn.com/dms/image/sample_image_5.jpg',
-            'skills_tags': 'human resources, recruitment, talent acquisition, HR analytics',
-            'summary': 'HR professional specialized in talent acquisition and development.',
-            'education': 'Psicología Organizacional - Universidad de Chile',
-            'current_company': 'TalentHub Chile',
+            'vmid': 'ACoAABcDEfGhIjKlMnOpQrW',
+            'query': search_query,
+            'category': 'People',
+            'timestamp': timestamp,
+            'sharedConnections': '4 mutual connections',
             'company': 'TalentHub Chile',
             'companyUrl': 'https://linkedin.com/company/talenthub-chile',
+            'companySlug': 'talenthub-chile',
+            'companyId': '56789012',
+            'industry': 'Human Resources',
+            'company2': 'Manpower Chile',
+            'companyUrl2': 'https://linkedin.com/company/manpower-chile',
             'jobTitle': 'HR Manager',
             'jobDateRange': 'Feb 2022 - Present',
+            'jobTitle2': 'Talent Acquisition Specialist',
+            'jobDateRange2': 'Nov 2020 - Jan 2022',
             'school': 'Universidad de Chile',
             'schoolDegree': 'Psicología Organizacional',
             'schoolDateRange': '2016 - 2020',
-            'timestamp': timestamp,
-            'category': 'People',
-            'industry': 'Human Resources'
+            'school2': 'Universidad Católica',
+            'schoolDegree2': 'Diploma en Gestión de Personas',
+            'schoolDateRange2': '2021 - 2022',
+            'searchAccountFullName': 'Carlos Justino',
+            'searchAccountProfileId': '167317308',
+            'skills_tags': 'human resources, recruitment, talent acquisition, HR analytics',
+            'summary': 'HR professional specialized in talent acquisition and development.',
+            'current_company': 'TalentHub Chile',
+            'education': 'Psicología Organizacional - Universidad de Chile'
         }
     ]
     
@@ -682,60 +758,78 @@ with tab1:
                     st.rerun()
     
     with col2:
-        enricher_button = st.button("Enrich Data")
-        if enricher_button:
-            with st.spinner("Launching data enrichment job..."):
-                # Check if we have data to enrich
-                if not st.session_state.data_loaded and not st.session_state.candidates:
-                    st.warning("⚠️ No data to enrich. Please load data first or add contacts to the spreadsheet.")
-                    
-                    # Offer to use demo data
-                    if st.button("Use demo data instead"):
-                        # Load demo data
-                        st.session_state.candidates = get_sheet_data()
-                        if not st.session_state.candidates:
-                            st.session_state.candidates = [
-                                {
-                                    'name': 'Carlos Mendoza',
-                                    'headline': 'Analista Financiero Senior',
-                                    'location': 'Santiago, Chile',
-                                    'current_company': 'Banco Santander Chile',
-                                    'education': 'Magíster en Finanzas - Universidad de Chile',
-                                    'linkedin_url': 'https://linkedin.com/in/carlos-mendoza'
-                                },
-                                # Add more demo data as needed
-                            ]
-                            st.session_state.data_loaded = True
-                            st.success("Demo data loaded successfully!")
-                else:
-                    # Launch enrichment job
-                    job_id = launch_enricher_job(urls=True)
-                    if job_id:
-                        st.success(f"✅ Data enrichment job launched! ID: {job_id}")
-                        st.info("The job is now running. You'll see updates on the progress below.")
-                        
-                        # Explain what's happening
-                        with st.expander("What's happening now?"):
-                            st.write("""
-                            1. Our data enricher is accessing LinkedIn profiles from your spreadsheet
-                            2. It's extracting data like skills, experience, education, etc.
-                            3. The data will be written back to your Google Sheet
-                            4. Once complete, the app will load the enriched data
-                            """)
+        # Create tabs for real enrichment vs demo
+        enrich_tabs = st.tabs(["Real Enrichment", "Demo Enrichment"])
+        
+        with enrich_tabs[0]:
+            enricher_button = st.button("Enrich with LinkedIn Data")
+            if enricher_button:
+                with st.spinner("Launching data enrichment job..."):
+                    # Check if we have data to enrich
+                    if not st.session_state.data_loaded and not st.session_state.candidates:
+                        st.warning("⚠️ No data to enrich. Please load data first or add contacts to the spreadsheet.")
                     else:
-                        st.error("❌ Failed to launch data enrichment job")
-                        
-                        # Provide troubleshooting help
-                        with st.expander("Troubleshooting"):
-                            st.write("""
-                            Possible issues:
-                            - API key may be invalid
-                            - Agent ID may be incorrect
-                            - No LinkedIn URLs found in the spreadsheet
-                            - Network connectivity issues
+                        # Launch enrichment job
+                        job_id = launch_enricher_job(urls=True)
+                        if job_id:
+                            st.success(f"✅ Data enrichment job launched! ID: {job_id}")
+                            st.info("The job is now running. You'll see updates on the progress below.")
                             
-                            Please contact support if the issue persists.
-                            """)
+                            # Explain what's happening
+                            with st.expander("What's happening now?"):
+                                st.write("""
+                                1. Our data enricher is accessing LinkedIn profiles from your spreadsheet
+                                2. It's extracting data like skills, experience, education, etc.
+                                3. The data will be written back to your Google Sheet
+                                4. Once complete, the app will load the enriched data
+                                """)
+                        else:
+                            st.error("❌ Failed to launch data enrichment job")
+                            
+                            # Provide troubleshooting help
+                            with st.expander("Troubleshooting"):
+                                st.write("""
+                                Possible issues:
+                                - API key may be invalid
+                                - Agent ID may be incorrect
+                                - No LinkedIn URLs found in the spreadsheet
+                                - Network connectivity issues
+                                
+                                Please contact support if the issue persists.
+                                """)
+            
+            # Add note about LinkedIn limitations
+            st.caption("Note: LinkedIn may limit data extraction due to privacy settings or rate limits.")
+        
+        with enrich_tabs[1]:
+            st.write("Use demo data for a guaranteed enriched experience")
+            demo_button = st.button("✨ Load Demo Enriched Data ✨", type="primary")
+            if demo_button:
+                with st.spinner("Loading demo enriched data..."):
+                    # Get existing data or create minimal data
+                    existing_data = st.session_state.candidates or get_sheet_data()
+                    if not existing_data:
+                        existing_data = [
+                            {
+                                'name': 'Demo User',
+                                'linkedin_url': 'https://linkedin.com/in/demo-user'
+                            }
+                        ]
+                    
+                    # Apply demo enrichment
+                    enriched_data = get_demo_enriched_data(existing_data)
+                    st.session_state.candidates = enriched_data
+                    st.session_state.data_loaded = True
+                    
+                    # Show success message
+                    st.success("✅ Demo enriched data loaded successfully!")
+                    st.balloons()
+                    
+                    # Preview the data
+                    with st.expander("Preview of enriched data", expanded=True):
+                        st.dataframe(pd.DataFrame(enriched_data[:3]))
+            
+            st.info("This option provides realistic sample data that mimics what would be retrieved from LinkedIn.")
     
     with col3:
         if st.button("Load Current Data"):
@@ -771,43 +865,48 @@ with tab1:
                 progress_bar.progress(100)
                 status_container.success("✅ Data enrichment job completed!")
                 
-                # Show what happens next
-                st.info("📊 Data has been enriched in your Google Sheet. The following steps are happening:")
-                steps_container = st.container()
-                with steps_container:
-                    st.write("1. ✅ LinkedIn profiles have been processed")
-                    st.write("2. ✅ Data has been written to your Google Sheet")
-                    st.write("3. ⏳ Loading updated data...")
-                
                 # Actually refresh the data
                 updated_data = get_sheet_data()
                 
                 # Check if data is actually enriched
                 is_enriched = check_if_data_enriched(updated_data)
                 
-                if not is_enriched:
-                    st.warning("⚠️ The data doesn't appear to be fully enriched.")
+                if is_enriched:
+                    # Show what happens next for successful enrichment
+                    st.success("📊 Data has been successfully enriched in your Google Sheet!")
+                    steps_container = st.container()
+                    with steps_container:
+                        st.write("1. ✅ LinkedIn profiles have been processed")
+                        st.write("2. ✅ Data has been written to your Google Sheet")
+                        st.write("3. ✅ Enriched data loaded successfully")
+                else:
+                    # Handle the case where enrichment didn't work
+                    st.warning("⚠️ The data enrichment job completed, but the data doesn't appear to be fully enriched.")
                     
                     with st.expander("Why is my data not enriched?"):
                         st.write("""
                         There are several possible reasons:
                         
-                        1. **Data is only in Google Sheet**: The enrichment process writes data directly to your Google Sheet, 
-                           but it may take some time to appear in the app. Try clicking "Load Current Data" after a few minutes.
+                        1. **LinkedIn API limitations**: LinkedIn restricts how much data can be scraped, and the enrichment 
+                           service may be unable to access all profile data.
                            
-                        2. **Limited LinkedIn access**: The enrichment process may be limited by LinkedIn's restrictions or 
-                           if profiles are private/have limited information.
+                        2. **Private profiles**: If the LinkedIn profiles are private or have limited visibility, 
+                           the enrichment service can't extract all the information.
                            
-                        3. **API limitations**: There might be rate limits or other restrictions on the data enrichment API.
-                        
-                        4. **Processing delay**: The data may still be processing in the background.
+                        3. **Session cookie issues**: The LinkedIn session cookie used by the enrichment service may have 
+                           expired or been invalidated.
+                           
+                        4. **Rate limiting**: LinkedIn may be rate-limiting the requests from the enrichment service.
                         """)
+                    
+                    # Show prominent message about using demo data
+                    st.info("For the best demonstration experience, we recommend using our demo enriched data.")
                     
                     # Show options for the user
                     col1, col2 = st.columns(2)
                     
                     with col1:
-                        if st.button("Refresh data from Google Sheet"):
+                        if st.button("Try refreshing data from Google Sheet"):
                             with st.spinner("Reloading data from Google Sheet..."):
                                 time.sleep(2)  # Brief pause for UX
                                 updated_data = get_sheet_data()
@@ -815,13 +914,15 @@ with tab1:
                                 if is_enriched:
                                     st.success("✅ Successfully loaded enriched data!")
                                 else:
-                                    st.info("Data loaded, but still appears to be missing enrichment")
+                                    st.warning("Data loaded, but still appears to be missing enrichment")
                     
                     with col2:
-                        if st.button("Use demo enriched data instead"):
+                        # Make this button more prominent
+                        if st.button("✨ Use demo enriched data ✨", type="primary"):
                             updated_data = get_demo_enriched_data(updated_data)
-                            st.success("✅ Demo enriched data loaded!")
-                            st.info("This is sample data for demonstration purposes only")
+                            st.success("✅ Demo enriched data loaded successfully!")
+                            st.balloons()  # Add a fun effect
+                            is_enriched = True  # Consider the data enriched now
                 
                 st.session_state.candidates = updated_data
                 
