@@ -185,8 +185,55 @@ def clear_sheet():
         traceback.print_exc()
         return False
 
+def validate_and_fix_linkedin_urls(data):
+    """Validate and fix LinkedIn URLs in the data"""
+    fixed_data = []
+    
+    for row in data:
+        fixed_row = row.copy()
+        
+        # Check if profileUrl exists and is valid
+        profile_url = row.get('profileUrl', '')
+        
+        # If profileUrl is not a valid LinkedIn URL
+        if not profile_url or 'linkedin.com/in/' not in profile_url.lower():
+            # Try to find a name to construct a URL
+            name = None
+            
+            # Check various fields for a name
+            if 'fullName' in row and row['fullName']:
+                name = row['fullName']
+            elif 'name' in row and row['name']:
+                name = row['name']
+            elif 'firstName' in row and row['firstName']:
+                if 'lastName' in row and row['lastName']:
+                    name = f"{row['firstName']} {row['lastName']}"
+                else:
+                    name = row['firstName']
+            
+            # If we found a name, try to construct a URL
+            if name:
+                # Convert name to a URL-friendly format
+                url_name = name.lower().replace(' ', '-')
+                # Remove special characters
+                import re
+                url_name = re.sub(r'[^a-z0-9-]', '', url_name)
+                # Construct URL
+                fixed_row['profileUrl'] = f"https://www.linkedin.com/in/{url_name}/"
+                print(f"Fixed LinkedIn URL: {fixed_row['profileUrl']} (from {profile_url})")
+            else:
+                # If we can't construct a URL, skip this row
+                print(f"Skipping row with invalid LinkedIn URL: {profile_url}")
+                continue
+        
+        fixed_data.append(fixed_row)
+    
+    return fixed_data
+
 def write_to_sheet(data):
     """Write data to Google Sheet with proper column mapping"""
+    # First validate and fix LinkedIn URLs
+    data = validate_and_fix_linkedin_urls(data)
     try:
         # Check if credentials file exists
         if not os.path.exists("service-account-key.json"):
@@ -215,6 +262,9 @@ def write_to_sheet(data):
             "school", "schoolDegree", "schoolDateRange", "school2", "schoolDegree2", 
             "schoolDateRange2", "searchAccountFullName", "searchAccountProfileId"
         ]
+        
+        # Debug log - print what we're about to write to the sheet
+        print(f"Data to write to sheet: {data[:2]}")
         
         # Check if the sheet has headers
         sheet_range = "candidatos!A1:Z1"
@@ -908,12 +958,24 @@ def process_uploaded_file(uploaded_file):
                 st.error(f"Required field(s) not found: {', '.join(missing_fields)}. Please ensure your file contains LinkedIn profile URLs.")
                 return None
         
+        # Check if we have valid LinkedIn URLs
+        valid_urls = 0
+        for row in data:
+            if 'profileUrl' in row and row['profileUrl'] and 'linkedin.com/in/' in row['profileUrl'].lower():
+                valid_urls += 1
+        
         # Debug info
         if data:
             all_keys = set()
             for row in data:
                 all_keys.update(row.keys())
             st.info(f"Processed {len(data)} contacts with fields: {', '.join(all_keys)}")
+            
+            # Show warning if we don't have valid LinkedIn URLs
+            if valid_urls == 0:
+                st.warning("⚠️ No valid LinkedIn URLs found in the uploaded file. URLs will be constructed from names.")
+            elif valid_urls < len(data):
+                st.warning(f"⚠️ Only {valid_urls} out of {len(data)} contacts have valid LinkedIn URLs. Missing URLs will be constructed from names.")
         
         return data
         
@@ -1056,10 +1118,45 @@ with tab1:
             st.info("This option provides realistic sample data that mimics what would be retrieved from LinkedIn.")
     
     with col3:
-        if st.button("Load Current Data"):
-            with st.spinner("Loading data from Google Sheet..."):
-                st.session_state.candidates = get_sheet_data()
-                st.success(f"Loaded {len(st.session_state.candidates)} candidates from sheet")
+        col3a, col3b = st.columns(2)
+        
+        with col3a:
+            if st.button("Load Current Data"):
+                with st.spinner("Loading data from Google Sheet..."):
+                    st.session_state.candidates = get_sheet_data()
+                    st.success(f"Loaded {len(st.session_state.candidates)} candidates from sheet")
+        
+        with col3b:
+            if st.button("Add Sample LinkedIn URLs"):
+                with st.spinner("Adding sample LinkedIn profiles..."):
+                    sample_data = [
+                        {
+                            "profileUrl": "https://www.linkedin.com/in/alisson-frota/",
+                            "fullName": "Alisson Frota"
+                        },
+                        {
+                            "profileUrl": "https://www.linkedin.com/in/herbert-zapata-salvo/",
+                            "fullName": "Herbert Zapata Salvo"
+                        },
+                        {
+                            "profileUrl": "https://www.linkedin.com/in/rkniazev/",
+                            "fullName": "Roman K."
+                        },
+                        {
+                            "profileUrl": "https://www.linkedin.com/in/enbonnet/",
+                            "fullName": "Ender Bonnet"
+                        },
+                        {
+                            "profileUrl": "https://www.linkedin.com/in/pierinazaramella/",
+                            "fullName": "Pierina Zaramella"
+                        }
+                    ]
+                    success = write_to_sheet(sample_data)
+                    if success:
+                        st.success("✅ Sample LinkedIn profiles added to spreadsheet!")
+                        st.session_state.candidates = get_sheet_data()
+                    else:
+                        st.error("❌ Failed to add sample profiles")
     
     # Show enrichment job status if running
     if st.session_state.enricher_status == "running" and st.session_state.enricher_job_id:
