@@ -252,15 +252,26 @@ def write_to_sheet(data):
         if not clear_result:
             st.warning("Could not clear previous data, will append new data")
         
-        # Define the expected column order based on PhantomBuster's output format
+        # Define the expected column order based on actual PhantomBuster LinkedIn Profile Scraper output
         expected_columns = [
-            "profileUrl", "fullName", "firstName", "lastName", "headline", 
-            "additionalInfo", "location", "connectionDegree", "profileImageUrl", "vmid",
-            "query", "category", "timestamp", "sharedConnections", "company",
-            "companyUrl", "companySlug", "companyId", "industry", "company2",
-            "companyUrl2", "jobTitle", "jobDateRange", "jobTitle2", "jobDateRange2",
-            "school", "schoolDegree", "schoolDateRange", "school2", "schoolDegree2", 
-            "schoolDateRange2", "searchAccountFullName", "searchAccountProfileId"
+            "profileUrl", "error", "refreshedAt", "scraperProfileId", "scraperFullName",
+            "companyIndustry", "companyName", "companyWebsite", "firstName", "lastName",
+            "linkedinCompanyUrl", "linkedinCompanySlug", "linkedinCompanyId", "linkedinDescription",
+            "linkedinHeadline", "linkedinIsHiringBadge", "linkedinIsOpenToWorkBadge",
+            "linkedinJobDateRange", "linkedinJobDescription", "linkedinJobLocation",
+            "linkedinJobTitle", "linkedinPreviousCompanySlug", "linkedinPreviousJobDateRange",
+            "linkedinPreviousJobLocation", "linkedinPreviousJobTitle", "linkedinProfileId",
+            "linkedinProfileSlug", "linkedinProfileUrl", "linkedinProfileUrn",
+            "linkedinProfileImageUrn", "linkedinProfileImageUrl", "linkedinSchoolDateRange",
+            "linkedinSchoolDegree", "linkedinSkillsLabel", "location", "previousCompanyName",
+            "professionalEmail", "mutualConnectionsUrl", "connectionsUrl", "linkedinCompanyName",
+            "linkedinCompanyDescription", "linkedinCompanyTagline", "linkedinCompanyFollowerCount",
+            "linkedinCompanyWebsite", "linkedinCompanyEmployeesCount", "linkedinCompanySize",
+            "linkedinCompanyHeadquarter", "linkedinCompanyIndustry", "linkedinCompanyFounded",
+            "linkedinCompanySpecialities", "linkedinSchoolDescription", "linkedinSchoolUrl",
+            "linkedinSchoolCompanySlug", "linkedinSchoolName", "linkedinPreviousSchoolUrl",
+            "linkedinPreviousSchoolCompanySlug", "linkedinPreviousSchoolDateRange",
+            "linkedinPreviousSchoolDegree", "linkedinPreviousSchoolName", "linkedinPreviousJobDescription"
         ]
         
         # Debug log - print what we're about to write to the sheet
@@ -1415,36 +1426,56 @@ with tab2:
             filtered_candidates = []
             search_term_lower = search_term.lower()
             
+            # Define field mappings for both old and new formats
+            field_mappings = {
+                'education': ['education', 'linkedinSchoolDegree', 'linkedinSchoolName'],
+                'headline': ['headline', 'linkedinHeadline'],
+                'skills': ['skills_tags', 'linkedinSkillsLabel'],
+                'company': ['current_company', 'company', 'companyName', 'linkedinCompanyName'],
+                'location': ['location', 'linkedinJobLocation'],
+                'description': ['summary', 'linkedinDescription', 'linkedinJobDescription'],
+                'job_title': ['jobTitle', 'linkedinJobTitle']
+            }
+            
             # Simple filtering logic based on the search term
             for candidate in candidates:
                 score = 0
                 
-                # Check various fields for matches
-                for field in ['education', 'headline', 'skills_tags', 'current_company', 'location']:
-                    if field in candidate and candidate[field]:
-                        field_value = candidate[field].lower()
-                        
-                        # Check for specific terms
-                        if "magíster" in search_term_lower and "magíster" in field_value:
-                            score += 3
-                        if "finanzas" in search_term_lower and "finanzas" in field_value:
-                            score += 2
-                        if "marketing" in search_term_lower and "marketing" in field_value:
-                            score += 2
-                        if "digital" in search_term_lower and "digital" in field_value:
-                            score += 1
-                        if "minería" in search_term_lower and "minería" in field_value:
-                            score += 2
-                        if "análisis" in search_term_lower and "análisis" in field_value:
-                            score += 2
-                        if "riesgo" in search_term_lower and "riesgo" in field_value:
-                            score += 1
-                        if "python" in search_term_lower and "python" in field_value:
-                            score += 2
-                        if "data science" in search_term_lower and "data" in field_value:
-                            score += 2
-                        if "startups" in search_term_lower and "startup" in field_value:
-                            score += 2
+                # Check all mapped fields for matches
+                for field_category, field_names in field_mappings.items():
+                    for field in field_names:
+                        if field in candidate and candidate[field]:
+                            field_value = str(candidate[field]).lower()
+                            
+                            # Direct match with search term
+                            if search_term_lower in field_value:
+                                score += 2
+                            
+                            # Check for specific terms
+                            if "magíster" in search_term_lower and "magíster" in field_value:
+                                score += 3
+                            if "finanzas" in search_term_lower and "finanzas" in field_value:
+                                score += 2
+                            if "marketing" in search_term_lower and "marketing" in field_value:
+                                score += 2
+                            if "digital" in search_term_lower and "digital" in field_value:
+                                score += 1
+                            if "minería" in search_term_lower and "minería" in field_value:
+                                score += 2
+                            if "análisis" in search_term_lower and "análisis" in field_value:
+                                score += 2
+                            if "riesgo" in search_term_lower and "riesgo" in field_value:
+                                score += 1
+                            if "python" in search_term_lower and "python" in field_value:
+                                score += 2
+                            if "data science" in search_term_lower and "data" in field_value:
+                                score += 2
+                            if "startups" in search_term_lower and "startup" in field_value:
+                                score += 2
+                            if "php" in search_term_lower and "php" in field_value:
+                                score += 2
+                            if "drupal" in search_term_lower and "drupal" in field_value:
+                                score += 2
                     
                 if score > 0:
                     candidate['match_score'] = score
@@ -1467,25 +1498,89 @@ with tab2:
                 score = candidate.get('match_score', 1)
                 match_percentage = min(int(score * 20), 95)  # Convert score to percentage, max 95%
                 
-                with st.expander(f"{candidate.get('name', 'Unknown')} - {candidate.get('headline', 'No headline')}"):
+                # Get name from various possible fields
+                name = candidate.get('fullName', candidate.get('firstName', ''))
+                if not name and 'firstName' in candidate:
+                    name = f"{candidate.get('firstName', '')} {candidate.get('lastName', '')}"
+                if not name:
+                    name = "Unknown"
+                    
+                # Get headline from various possible fields
+                headline = candidate.get('linkedinHeadline', candidate.get('headline', 'No headline'))
+                
+                with st.expander(f"{name} - {headline}"):
                     col1, col2 = st.columns([2,1])
                     
                     with col1:
-                        for field in ['current_company', 'education', 'location', 'skills_tags']:
-                            if field in candidate and candidate[field]:
-                                st.write(f"**{field.replace('_', ' ').title()}:** {candidate[field]}")
+                        # Company info
+                        company = candidate.get('companyName', candidate.get('linkedinCompanyName', 
+                                  candidate.get('current_company', '')))
+                        if company:
+                            st.write(f"**Company:** {company}")
+                            
+                            # Company industry
+                            industry = candidate.get('companyIndustry', candidate.get('linkedinCompanyIndustry', ''))
+                            if industry:
+                                st.write(f"**Industry:** {industry}")
+                        
+                        # Job title
+                        job_title = candidate.get('linkedinJobTitle', candidate.get('jobTitle', ''))
+                        job_date = candidate.get('linkedinJobDateRange', '')
+                        if job_title:
+                            job_info = f"**Job:** {job_title}"
+                            if job_date:
+                                job_info += f" ({job_date})"
+                            st.write(job_info)
+                        
+                        # Location
+                        location = candidate.get('location', candidate.get('linkedinJobLocation', ''))
+                        if location:
+                            st.write(f"**Location:** {location}")
+                        
+                        # Education
+                        education = candidate.get('linkedinSchoolDegree', candidate.get('education', ''))
+                        school = candidate.get('linkedinSchoolName', '')
+                        if education or school:
+                            edu_info = "**Education:** "
+                            if education and school:
+                                edu_info += f"{education} - {school}"
+                            elif education:
+                                edu_info += education
+                            elif school:
+                                edu_info += school
+                            st.write(edu_info)
+                        
+                        # Skills
+                        skills = candidate.get('linkedinSkillsLabel', candidate.get('skills_tags', ''))
+                        if skills:
+                            st.write(f"**Skills:** {skills}")
+                            
+                        # Email
+                        email = candidate.get('professionalEmail', '')
+                        if email:
+                            st.write(f"**Email:** {email}")
                     
                     with col2:
                         st.write(f"**Match:** {match_percentage}%")
                         
+                        # Profile image
+                        img_url = candidate.get('linkedinProfileImageUrl', '')
+                        if img_url:
+                            st.image(img_url, width=100)
+                        
                         # LinkedIn link
-                        linkedin_url = candidate.get('linkedin_url', '')
+                        linkedin_url = candidate.get('profileUrl', candidate.get('linkedinProfileUrl', ''))
                         if linkedin_url:
                             st.markdown(f"[View LinkedIn]({linkedin_url})")
                         
                         # Google Sheet link
                         sheet_url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}"
                         st.markdown(f"[View in Sheet]({sheet_url})")
+                        
+                        # Last updated
+                        refreshed = candidate.get('refreshedAt', '')
+                        if refreshed:
+                            st.caption(f"Last updated: {refreshed}")
 
 # Tab 3: Data View
 with tab3:
@@ -1498,7 +1593,42 @@ with tab3:
     
     # Show data
     if st.session_state.data_loaded and st.session_state.candidates:
-        st.dataframe(pd.DataFrame(st.session_state.candidates))
+        # Create dataframe
+        df = pd.DataFrame(st.session_state.candidates)
+        
+        # Organize columns into categories for better viewing
+        column_categories = {
+            "Basic Info": ["profileUrl", "firstName", "lastName", "linkedinHeadline", "location", 
+                          "linkedinProfileImageUrl", "professionalEmail"],
+            "Company Info": ["companyName", "companyIndustry", "companyWebsite", "linkedinCompanyName",
+                           "linkedinCompanyUrl", "linkedinCompanyDescription"],
+            "Job Info": ["linkedinJobTitle", "linkedinJobDateRange", "linkedinJobLocation", 
+                        "linkedinJobDescription", "linkedinPreviousJobTitle", 
+                        "linkedinPreviousJobDateRange", "linkedinPreviousJobDescription"],
+            "Education": ["linkedinSchoolName", "linkedinSchoolDegree", "linkedinSchoolDateRange",
+                         "linkedinPreviousSchoolName", "linkedinPreviousSchoolDegree", 
+                         "linkedinPreviousSchoolDateRange"],
+            "Skills & Details": ["linkedinSkillsLabel", "linkedinDescription"],
+            "Metadata": ["refreshedAt", "scraperProfileId", "scraperFullName", "error"]
+        }
+        
+        # Create tabs for each category
+        data_tabs = st.tabs(list(column_categories.keys()))
+        
+        # Display data in each tab
+        for i, (category, columns) in enumerate(column_categories.items()):
+            with data_tabs[i]:
+                # Filter columns that exist in the dataframe
+                existing_columns = [col for col in columns if col in df.columns]
+                
+                if existing_columns:
+                    st.dataframe(df[existing_columns], use_container_width=True)
+                else:
+                    st.info(f"No {category.lower()} data available.")
+        
+        # Add a "Raw Data" tab with all columns
+        with st.expander("Raw Data (All Columns)"):
+            st.dataframe(df, use_container_width=True)
     else:
         st.info("No data loaded. Click 'Refresh Data' to load data from Google Sheet.")
 
