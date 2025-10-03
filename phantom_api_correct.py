@@ -67,7 +67,7 @@ def launch_agent():
     if not agent_config:
         agent_config = {
             "spreadsheetUrl": SHEET_URL,
-            "columnName": "linkedin_url",
+            "columnName": "profileUrl",  # FIXED: Use profileUrl instead of linkedin_url
             "numberOfProfilesPerLaunch": 2
         }
     else:

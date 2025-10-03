@@ -186,7 +186,7 @@ def clear_sheet():
         return False
 
 def write_to_sheet(data):
-    """Write data to Google Sheet"""
+    """Write data to Google Sheet with proper column mapping"""
     try:
         # Check if credentials file exists
         if not os.path.exists("service-account-key.json"):
@@ -205,7 +205,18 @@ def write_to_sheet(data):
         if not clear_result:
             st.warning("Could not clear previous data, will append new data")
         
-        # Get existing data to determine headers
+        # Define the expected column order based on PhantomBuster's output format
+        expected_columns = [
+            "profileUrl", "fullName", "firstName", "lastName", "headline", 
+            "additionalInfo", "location", "connectionDegree", "profileImageUrl", "vmid",
+            "query", "category", "timestamp", "sharedConnections", "company",
+            "companyUrl", "companySlug", "companyId", "industry", "company2",
+            "companyUrl2", "jobTitle", "jobDateRange", "jobTitle2", "jobDateRange2",
+            "school", "schoolDegree", "schoolDateRange", "school2", "schoolDegree2", 
+            "schoolDateRange2", "searchAccountFullName", "searchAccountProfileId"
+        ]
+        
+        # Check if the sheet has headers
         sheet_range = "candidatos!A1:Z1"
         result = service.spreadsheets().values().get(
             spreadsheetId=SHEET_ID,
@@ -214,43 +225,69 @@ def write_to_sheet(data):
         
         existing_headers = result.get('values', [[]])[0]
         
-        # If no headers exist, use the data headers
+        # If no headers exist or they don't match what we expect, create new headers
         if not existing_headers:
-            headers = list(data[0].keys())
+            headers = expected_columns
         else:
+            # Use existing headers, but ensure they're in the right order
             headers = existing_headers
-            
-            # Add any missing headers from data
-            for row in data:
-                for key in row.keys():
-                    if key not in headers:
-                        headers.append(key)
         
-        # Prepare data for writing
-        values = [headers]
+        # ALWAYS use our expected columns to ensure proper structure
+        headers = expected_columns
+        values = [headers]  # First row is headers
+        
         for row in data:
-            values.append([row.get(header, "") for header in headers])
+            # Create a row with the correct column mapping
+            mapped_row = []
+            
+            # For each expected column, try to find the corresponding value in our data
+            for column in headers:
+                # Special handling for linkedin_url -> profileUrl mapping
+                if column == "profileUrl":
+                    # Try multiple possible field names for LinkedIn URL
+                    if "profileUrl" in row:
+                        mapped_row.append(row.get("profileUrl", ""))
+                    elif "linkedin_url" in row:
+                        mapped_row.append(row.get("linkedin_url", ""))
+                    elif "url" in row:
+                        mapped_row.append(row.get("url", ""))
+                    else:
+                        mapped_row.append("")
+                
+                # Special handling for name -> fullName mapping
+                elif column == "fullName":
+                    if "fullName" in row:
+                        mapped_row.append(row.get("fullName", ""))
+                    elif "name" in row:
+                        mapped_row.append(row.get("name", ""))
+                    else:
+                        mapped_row.append("")
+                
+                # Try to get the value directly if it exists
+                else:
+                    mapped_row.append(row.get(column, ""))
+            
+            values.append(mapped_row)
+            
+        # Debug log to show the first row of data
+        if len(values) > 1:
+            print(f"First row being written to sheet: {values[1][:5]}")  # Show first 5 columns
         
-        # Determine if we're updating or appending
-        if not existing_headers:
-            # Write headers and data
-            body = {'values': values}
-            service.spreadsheets().values().update(
-                spreadsheetId=SHEET_ID,
-                range="candidatos!A1",
-                valueInputOption='RAW',
-                body=body
-            ).execute()
-        else:
-            # Append data only
-            body = {'values': values[1:]}  # Skip headers
-            service.spreadsheets().values().append(
-                spreadsheetId=SHEET_ID,
-                range="candidatos!A1",
-                valueInputOption='RAW',
-                insertDataOption='INSERT_ROWS',
-                body=body
-            ).execute()
+        # Clear the sheet and write the new data
+        service.spreadsheets().values().clear(
+            spreadsheetId=SHEET_ID,
+            range="candidatos!A1:Z1000",
+            body={}
+        ).execute()
+        
+        # Write headers and data
+        body = {'values': values}
+        service.spreadsheets().values().update(
+            spreadsheetId=SHEET_ID,
+            range="candidatos!A1",
+            valueInputOption='RAW',
+            body=body
+        ).execute()
         
         st.session_state.last_update = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         return True
@@ -275,7 +312,7 @@ def launch_enricher_job(urls=None, query=None, limit=5):
                 # LinkedIn Profile Scraper default config
                 agent_config = {
                     "spreadsheetUrl": f"https://docs.google.com/spreadsheets/d/{SHEET_ID}",
-                    "columnName": "linkedin_url",
+                    "columnName": "profileUrl",  # FIXED: Use profileUrl instead of linkedin_url
                     "numberOfProfilesPerLaunch": limit
                 }
             elif query:
@@ -291,7 +328,7 @@ def launch_enricher_job(urls=None, query=None, limit=5):
             agent_config["spreadsheetUrl"] = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}"
             
             if urls:
-                agent_config["columnName"] = "linkedin_url"
+                agent_config["columnName"] = "profileUrl"  # FIXED: Use profileUrl instead of linkedin_url
                 if "numberOfProfilesPerLaunch" in agent_config:
                     agent_config["numberOfProfilesPerLaunch"] = limit
                 else:
@@ -760,7 +797,7 @@ def get_demo_enriched_data(existing_data):
 
 # Function to process uploaded file
 def process_uploaded_file(uploaded_file):
-    """Process uploaded CSV or Excel file"""
+    """Process uploaded CSV or Excel file and map columns correctly"""
     try:
         # Check file type
         file_type = uploaded_file.name.split('.')[-1].lower()
@@ -773,15 +810,70 @@ def process_uploaded_file(uploaded_file):
             st.error("Unsupported file type. Please upload CSV or Excel file.")
             return None
         
+        # Map column names to the expected PhantomBuster format
+        column_mapping = {
+            'name': 'fullName',
+            'linkedin_url': 'profileUrl',
+            'linkedin': 'profileUrl',
+            'url': 'profileUrl',
+            'profile_url': 'profileUrl',
+            'email': 'email',
+            'phone': 'phone',
+            'company': 'company',
+            'position': 'jobTitle',
+            'job_title': 'jobTitle',
+            'location': 'location'
+        }
+        
+        # Rename columns if they exist in the dataframe
+        for old_col, new_col in column_mapping.items():
+            if old_col in df.columns:
+                df = df.rename(columns={old_col: new_col})
+                
+        # Print column names for debugging
+        print(f"Columns after mapping: {df.columns.tolist()}")
+        
+        # Ensure we have the profileUrl column
+        if 'profileUrl' not in df.columns and len(df.columns) > 0:
+            # Try to find a column that might contain LinkedIn URLs
+            for col in df.columns:
+                # Check if any value in this column looks like a LinkedIn URL
+                if df[col].astype(str).str.contains('linkedin.com', case=False).any():
+                    print(f"Found column '{col}' with LinkedIn URLs, mapping to profileUrl")
+                    df = df.rename(columns={col: 'profileUrl'})
+                    break
+        
         # Convert to list of dicts
         data = df.replace({np.nan: None}).to_dict('records')
         
-        # Ensure required fields
-        required_fields = ['name', 'linkedin_url']
-        for field in required_fields:
-            if field not in df.columns:
-                st.error(f"Required field '{field}' not found in uploaded file.")
+        # Check for required fields (using the new column names)
+        required_fields = ['profileUrl']  # At minimum, we need the LinkedIn URL
+        missing_fields = [field for field in required_fields if not any(field in row and row[field] for row in data)]
+        
+        if missing_fields:
+            # Try alternate field names
+            alternate_mapping = {'linkedin_url': 'profileUrl', 'url': 'profileUrl', 'linkedin': 'profileUrl'}
+            
+            for alt_field, expected_field in alternate_mapping.items():
+                if expected_field in missing_fields and any(alt_field in row and row[alt_field] for row in data):
+                    # Map the alternate field to the expected field
+                    for row in data:
+                        if alt_field in row and row[alt_field]:
+                            row[expected_field] = row[alt_field]
+                    
+                    missing_fields.remove(expected_field)
+            
+            # If still missing required fields, show error
+            if missing_fields:
+                st.error(f"Required field(s) not found: {', '.join(missing_fields)}. Please ensure your file contains LinkedIn profile URLs.")
                 return None
+        
+        # Debug info
+        if data:
+            all_keys = set()
+            for row in data:
+                all_keys.update(row.keys())
+            st.info(f"Processed {len(data)} contacts with fields: {', '.join(all_keys)}")
         
         return data
         
