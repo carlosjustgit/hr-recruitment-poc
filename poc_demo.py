@@ -484,6 +484,46 @@ def get_container_info(job_id):
         print(f"Exception getting container info: {e}")
         return None
 
+def get_enricher_progress(job_id):
+    """Get the progress of the data enrichment job"""
+    try:
+        # Try to get container output which might contain progress information
+        url = "https://api.phantombuster.com/api/v2/containers/fetch-output"
+        headers = {"X-Phantombuster-Key": DATA_ENRICHER_API_KEY}
+        params = {"id": job_id}
+        
+        response = requests.get(url, params=params, headers=headers)
+        
+        if response.status_code == 200:
+            data = response.json()
+            output = data.get("output", "")
+            
+            # Try to parse progress information from output
+            # Look for patterns like "Processing profile 3/9"
+            if output:
+                import re
+                progress_match = re.search(r"Processing (?:profile|profiles|URL) (\d+)/(\d+)", output)
+                if progress_match:
+                    processed = int(progress_match.group(1))
+                    total = int(progress_match.group(2))
+                    return {'processed': processed, 'total': total}
+            
+            # If we couldn't find progress in output, try container info
+            container_info = get_container_info(job_id)
+            if container_info:
+                # Some PhantomBuster agents report progress in container info
+                progress = container_info.get("progress")
+                if progress and isinstance(progress, dict):
+                    processed = progress.get("processed", 0)
+                    total = progress.get("total", 0)
+                    if total > 0:
+                        return {'processed': processed, 'total': total}
+        
+        return None
+    except Exception as e:
+        print(f"Error getting enricher progress: {e}")
+        return None
+
 def get_enricher_results():
     """Get the results from the data enricher"""
     try:
@@ -1030,19 +1070,37 @@ with tab1:
         progress_bar = progress_container.progress(0)
         
         # Real job monitoring
-        max_checks = 30  # Maximum number of status checks
-        check_interval = 3  # Seconds between checks
+        max_checks = 60  # Increased maximum number of status checks
+        check_interval = 5  # Increased interval between checks
         
         for i in range(1, max_checks + 1):
-            # Calculate progress percentage (max 95% until confirmed complete)
-            progress_percent = min(95, int((i / max_checks) * 100))
+            # Get actual progress from PhantomBuster if possible
+            progress_info = get_enricher_progress(st.session_state.enricher_job_id)
             
-            # Update progress bar
-            progress_bar.progress(progress_percent)
+            if progress_info and 'processed' in progress_info and 'total' in progress_info:
+                # We have actual progress information
+                processed = progress_info['processed']
+                total = progress_info['total']
+                
+                if total > 0:
+                    # Calculate actual progress percentage (max 90% until confirmed complete)
+                    actual_percent = min(90, int((processed / total) * 100))
+                    progress_bar.progress(actual_percent)
+                    status_container.info(f"Data enrichment in progress... Processing profiles {processed}/{total} ({actual_percent}%)")
+                else:
+                    # Fallback to time-based progress if total is 0
+                    progress_percent = min(80, int((i / max_checks) * 100))
+                    progress_bar.progress(progress_percent)
+                    status_container.info(f"Data enrichment in progress... ({progress_percent}%)")
+            else:
+                # Fallback to time-based progress if we can't get actual progress
+                # Make it more conservative - max 80% until confirmed complete
+                progress_percent = min(80, int((i / max_checks) * 100))
+                progress_bar.progress(progress_percent)
+                status_container.info(f"Data enrichment in progress... Checking status ({i}/{max_checks})")
             
             # Check actual job status
             status = check_enricher_status(st.session_state.enricher_job_id)
-            status_container.info(f"Data enrichment in progress... Checking status ({i}/{max_checks})")
             
             if status == "completed":
                 # Job completed successfully
