@@ -262,34 +262,52 @@ def write_to_sheet(data):
 
 # Functions to interact with Data Enricher
 def launch_enricher_job(urls=None, query=None, limit=5):
-    """Launch data enrichment job"""
+    """Launch data enrichment job using the correct PhantomBuster API parameters"""
     try:
         url = "https://api.phantombuster.com/api/v2/agents/launch"
         
-        # Determine which type of job to launch
-        if urls:
-            # Profile scraper with URLs
-            payload = {
-                "id": DATA_ENRICHER_AGENT_ID,
-                "argument": {
+        # First, try to get the agent's current configuration
+        agent_config = get_agent_config()
+        
+        # If we couldn't get the config, create a default one
+        if not agent_config:
+            if urls:
+                # LinkedIn Profile Scraper default config
+                agent_config = {
                     "spreadsheetUrl": f"https://docs.google.com/spreadsheets/d/{SHEET_ID}",
                     "columnName": "linkedin_url",
-                    "numberOfProfiles": limit
+                    "numberOfProfilesPerLaunch": limit
                 }
-            }
-        elif query:
-            # Search query
-            payload = {
-                "id": DATA_ENRICHER_AGENT_ID,
-                "argument": {
-                    "spreadsheetId": SHEET_ID,
+            elif query:
+                # LinkedIn Search Export default config
+                agent_config = {
+                    "spreadsheetUrl": f"https://docs.google.com/spreadsheets/d/{SHEET_ID}",
+                    "searchUrl": f"https://www.linkedin.com/search/results/people/?keywords={query}",
                     "numberOfProfiles": limit,
-                    "searchQuery": query
+                    "saveSearchResults": True
                 }
-            }
         else:
-            st.error("Either URLs or query must be provided")
-            return None
+            # Update the existing config with our parameters
+            agent_config["spreadsheetUrl"] = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}"
+            
+            if urls:
+                agent_config["columnName"] = "linkedin_url"
+                if "numberOfProfilesPerLaunch" in agent_config:
+                    agent_config["numberOfProfilesPerLaunch"] = limit
+                else:
+                    agent_config["numberOfProfiles"] = limit
+            elif query:
+                agent_config["searchUrl"] = f"https://www.linkedin.com/search/results/people/?keywords={query}"
+                agent_config["numberOfProfiles"] = limit
+        
+        # Construct the payload according to documentation
+        payload = {
+            "id": DATA_ENRICHER_AGENT_ID,
+            "argument": agent_config
+        }
+        
+        # Log the payload for debugging
+        print(f"Launching enricher with payload: {json.dumps(payload, indent=2)}")
         
         headers = {
             "X-Phantombuster-Key": DATA_ENRICHER_API_KEY,
@@ -305,7 +323,7 @@ def launch_enricher_job(urls=None, query=None, limit=5):
             st.session_state.enricher_status = "running"
             return job_id
         else:
-            st.error(f"Error launching data enrichment job: {response.status_code}")
+            st.error(f"Error launching data enrichment job: {response.status_code} - {response.text}")
             st.session_state.enricher_status = "error"
             return None
             
@@ -314,76 +332,150 @@ def launch_enricher_job(urls=None, query=None, limit=5):
         st.session_state.enricher_status = "error"
         return None
 
-def check_enricher_status(job_id):
-    """Check data enrichment job status"""
+def get_agent_config():
+    """Get the agent's current configuration"""
     try:
-        url = f"https://api.phantombuster.com/api/v2/containers/fetch-output"
+        url = "https://api.phantombuster.com/api/v2/agents/fetch"
+        headers = {"X-Phantombuster-Key": DATA_ENRICHER_API_KEY}
+        params = {"id": DATA_ENRICHER_AGENT_ID}
         
-        headers = {
-            "X-Phantombuster-Key": DATA_ENRICHER_API_KEY
-        }
+        response = requests.get(url, params=params, headers=headers)
         
+        if response.status_code == 200:
+            data = response.json()
+            
+            # Extract and parse the argument JSON
+            try:
+                argument_str = data.get('argument', '{}')
+                return json.loads(argument_str)
+            except:
+                return {}
+        else:
+            return {}
+    except:
+        return {}
+
+def check_enricher_status(job_id):
+    """Check data enrichment job status using the correct API endpoints"""
+    try:
+        # First try the container fetch-output endpoint
+        url = "https://api.phantombuster.com/api/v2/containers/fetch-output"
+        headers = {"X-Phantombuster-Key": DATA_ENRICHER_API_KEY}
         params = {"id": job_id}
+        
         response = requests.get(url, params=params, headers=headers)
         
         if response.status_code == 200:
             data = response.json()
             status = data.get("status")
             
+            # Log for debugging
+            print(f"Container status check: {status}")
+            
             # Check for different status types
             if status == "finished":
                 st.session_state.enricher_status = "completed"
+                
+                # Try to get the results immediately
+                get_enricher_results()
+                
                 return "completed"
             elif status == "error":
                 st.session_state.enricher_status = "error"
                 return "error"
-            elif status == "running":
+            elif status in ["running", "queued"]:
                 return "running"
-            elif status == "queued":
-                return "running"  # Treat queued as still running
-            elif status is None:
-                # Check container status from a different endpoint
-                container_info = get_enricher_job_info(job_id)
+            else:
+                # If status is None or unknown, check container info
+                container_info = get_container_info(job_id)
                 if container_info:
                     container_status = container_info.get("status")
+                    print(f"Container info status: {container_status}")
+                    
                     if container_status in ["finished", "succeeded"]:
                         st.session_state.enricher_status = "completed"
+                        
+                        # Try to get the results
+                        get_enricher_results()
+                        
                         return "completed"
                     elif container_status == "error":
                         st.session_state.enricher_status = "error"
                         return "error"
+                    elif container_status in ["running", "queued"]:
+                        return "running"
                 
-                # If we can't determine status, assume still running
-                return "running"
-            else:
+                # If we still can't determine, assume running
                 return "running"
         else:
             # Log the error for debugging
             print(f"Error checking status: {response.status_code} - {response.text}")
+            
+            # Try container info as fallback
+            container_info = get_container_info(job_id)
+            if container_info:
+                container_status = container_info.get("status")
+                if container_status in ["finished", "succeeded"]:
+                    st.session_state.enricher_status = "completed"
+                    return "completed"
+                elif container_status == "error":
+                    st.session_state.enricher_status = "error"
+                    return "error"
+            
             return "unknown"
             
     except Exception as e:
         st.error(f"Error checking enrichment status: {e}")
         return "error"
 
-def get_enricher_job_info(job_id):
-    """Get enrichment job info"""
+def get_container_info(job_id):
+    """Get container info using the correct API endpoint"""
     try:
-        url = f"https://api.phantombuster.com/api/v2/containers/fetch"
-        
-        headers = {
-            "X-Phantombuster-Key": DATA_ENRICHER_API_KEY
-        }
-        
+        url = "https://api.phantombuster.com/api/v2/containers/fetch"
+        headers = {"X-Phantombuster-Key": DATA_ENRICHER_API_KEY}
         params = {"id": job_id}
+        
         response = requests.get(url, params=params, headers=headers)
         
         if response.status_code == 200:
             return response.json()
         else:
+            print(f"Error getting container info: {response.status_code} - {response.text}")
             return None
             
-    except Exception:
+    except Exception as e:
+        print(f"Exception getting container info: {e}")
+        return None
+
+def get_enricher_results():
+    """Get the results from the data enricher"""
+    try:
+        # According to documentation, this is how to get JSON results
+        url = "https://api.phantombuster.com/api/v2/agents/fetch-json-result"
+        headers = {"X-Phantombuster-Key": DATA_ENRICHER_API_KEY}
+        params = {"id": DATA_ENRICHER_AGENT_ID}
+        
+        response = requests.get(url, params=params, headers=headers)
+        
+        if response.status_code == 200:
+            try:
+                # Try to parse as JSON
+                data = response.json()
+                
+                # Log for debugging
+                print(f"Got enricher results: {len(data) if isinstance(data, list) else 'not a list'}")
+                
+                # Store in session state for later use
+                st.session_state.enricher_results = data
+                return data
+            except:
+                print("Error parsing enricher results as JSON")
+                return None
+        else:
+            print(f"Error getting enricher results: {response.status_code} - {response.text}")
+            return None
+    except Exception as e:
+        print(f"Exception getting enricher results: {e}")
         return None
 
 # Function to check if data is actually enriched
