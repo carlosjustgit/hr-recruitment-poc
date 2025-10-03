@@ -242,20 +242,61 @@ def check_phantom_status(job_id):
             data = response.json()
             status = data.get("status")
             
+            # Check for different status types
             if status == "finished":
                 st.session_state.phantom_status = "completed"
                 return "completed"
             elif status == "error":
                 st.session_state.phantom_status = "error"
                 return "error"
+            elif status == "running":
+                return "running"
+            elif status == "queued":
+                return "running"  # Treat queued as still running
+            elif status is None:
+                # Check container status from a different endpoint
+                container_info = get_container_info(job_id)
+                if container_info:
+                    container_status = container_info.get("status")
+                    if container_status in ["finished", "succeeded"]:
+                        st.session_state.phantom_status = "completed"
+                        return "completed"
+                    elif container_status == "error":
+                        st.session_state.phantom_status = "error"
+                        return "error"
+                
+                # If we can't determine status, assume still running
+                return "running"
             else:
                 return "running"
         else:
+            # Log the error for debugging
+            print(f"Error checking status: {response.status_code} - {response.text}")
             return "unknown"
             
     except Exception as e:
         st.error(f"Error checking PhantomBuster status: {e}")
         return "error"
+
+def get_container_info(job_id):
+    """Get container info from PhantomBuster"""
+    try:
+        url = f"https://api.phantombuster.com/api/v2/containers/fetch"
+        
+        headers = {
+            "X-Phantombuster-Key": PHANTOM_API_KEY
+        }
+        
+        params = {"id": job_id}
+        response = requests.get(url, params=params, headers=headers)
+        
+        if response.status_code == 200:
+            return response.json()
+        else:
+            return None
+            
+    except Exception:
+        return None
 
 # Function to process uploaded file
 def process_uploaded_file(uploaded_file):
@@ -326,13 +367,60 @@ with tab1:
                     st.error("Failed to add contacts to spreadsheet")
     
     with col2:
-        if st.button("Enrich with PhantomBuster"):
+        phantom_button = st.button("Enrich with PhantomBuster")
+        if phantom_button:
             with st.spinner("Launching PhantomBuster job..."):
-                job_id = launch_phantom_job(urls=True)
-                if job_id:
-                    st.success(f"PhantomBuster job launched! ID: {job_id}")
+                # Check if we have data to enrich
+                if not st.session_state.data_loaded and not st.session_state.candidates:
+                    st.warning("⚠️ No data to enrich. Please load data first or add contacts to the spreadsheet.")
+                    
+                    # Offer to use demo data
+                    if st.button("Use demo data instead"):
+                        # Load demo data
+                        st.session_state.candidates = get_sheet_data()
+                        if not st.session_state.candidates:
+                            st.session_state.candidates = [
+                                {
+                                    'name': 'Carlos Mendoza',
+                                    'headline': 'Analista Financiero Senior',
+                                    'location': 'Santiago, Chile',
+                                    'current_company': 'Banco Santander Chile',
+                                    'education': 'Magíster en Finanzas - Universidad de Chile',
+                                    'linkedin_url': 'https://linkedin.com/in/carlos-mendoza'
+                                },
+                                # Add more demo data as needed
+                            ]
+                            st.session_state.data_loaded = True
+                            st.success("Demo data loaded successfully!")
                 else:
-                    st.error("Failed to launch PhantomBuster job")
+                    # Launch PhantomBuster job
+                    job_id = launch_phantom_job(urls=True)
+                    if job_id:
+                        st.success(f"✅ PhantomBuster job launched! ID: {job_id}")
+                        st.info("The job is now running. You'll see updates on the progress below.")
+                        
+                        # Explain what's happening
+                        with st.expander("What's happening now?"):
+                            st.write("""
+                            1. PhantomBuster is accessing LinkedIn profiles from your spreadsheet
+                            2. It's extracting data like skills, experience, education, etc.
+                            3. The data will be written back to your Google Sheet
+                            4. Once complete, the app will load the enriched data
+                            """)
+                    else:
+                        st.error("❌ Failed to launch PhantomBuster job")
+                        
+                        # Provide troubleshooting help
+                        with st.expander("Troubleshooting"):
+                            st.write("""
+                            Possible issues:
+                            - PhantomBuster API key may be invalid
+                            - PhantomBuster Agent ID may be incorrect
+                            - No LinkedIn URLs found in the spreadsheet
+                            - Network connectivity issues
+                            
+                            Check your PhantomBuster account to verify your API key and Agent ID.
+                            """)
     
     with col3:
         if st.button("Load Current Data"):
@@ -343,25 +431,62 @@ with tab1:
     # Show phantom status if job is running
     if st.session_state.phantom_status == "running" and st.session_state.phantom_job_id:
         status_container = st.empty()
-        progress_bar = st.progress(0)
+        progress_container = st.empty()
         
-        for i in range(1, 101):
+        # Create a progress bar
+        progress_bar = progress_container.progress(0)
+        
+        # Real job monitoring
+        max_checks = 30  # Maximum number of status checks
+        check_interval = 3  # Seconds between checks
+        
+        for i in range(1, max_checks + 1):
+            # Calculate progress percentage (max 95% until confirmed complete)
+            progress_percent = min(95, int((i / max_checks) * 100))
+            
+            # Update progress bar
+            progress_bar.progress(progress_percent)
+            
+            # Check actual job status
             status = check_phantom_status(st.session_state.phantom_job_id)
+            status_container.info(f"PhantomBuster job running... Checking status ({i}/{max_checks})")
             
             if status == "completed":
+                # Job completed successfully
                 progress_bar.progress(100)
-                status_container.success("PhantomBuster job completed!")
-                # Refresh data
-                st.session_state.candidates = get_sheet_data()
+                status_container.success("✅ PhantomBuster job completed successfully!")
+                
+                # Show what happens next
+                st.info("📊 Data has been enriched in your Google Sheet. The following steps are happening:")
+                steps_container = st.container()
+                with steps_container:
+                    st.write("1. ✅ LinkedIn profiles have been scraped")
+                    st.write("2. ✅ Data has been written to your Google Sheet")
+                    st.write("3. ⏳ Loading updated data...")
+                
+                # Actually refresh the data
+                updated_data = get_sheet_data()
+                st.session_state.candidates = updated_data
+                
+                # Show success message with counts
+                if updated_data:
+                    st.success(f"✅ Successfully loaded {len(updated_data)} candidates with enriched data!")
+                    
+                    # Show a preview of the enriched data
+                    with st.expander("Preview of enriched data"):
+                        st.dataframe(pd.DataFrame(updated_data[:5]))
+                
                 break
+                
             elif status == "error":
+                # Job failed
                 progress_bar.progress(100)
-                status_container.error("PhantomBuster job failed")
+                status_container.error("❌ PhantomBuster job failed")
+                st.error("The job failed to complete. Please check your PhantomBuster account for details.")
                 break
-            else:
-                progress_bar.progress(min(i, 99))
-                status_container.info(f"PhantomBuster job running... ({i}%)")
-                time.sleep(2)
+                
+            # Wait before next check
+            time.sleep(check_interval)
 
 # Tab 2: Search Candidates
 with tab2:
