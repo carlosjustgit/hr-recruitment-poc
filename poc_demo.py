@@ -2,7 +2,7 @@
 Practical PoC for HR Recruitment Agent
 - Upload contacts
 - Add to main spreadsheet
-- Enrich via PhantomBuster
+- Enrich via Data Enricher
 - Query enriched data
 """
 import streamlit as st
@@ -26,8 +26,8 @@ st.set_page_config(page_title="HR Recruitment PoC", page_icon="🔍", layout="wi
 
 # Configuration
 SHEET_ID = "12Wp7WSecBTDn1bwb-phv5QN6JEC8vpztgs_tK5_fMdQ"
-PHANTOM_API_KEY = "1SROua2I62PpnUfCj52i0w3Dc3X50lRNZV1BFDA62LY"
-PHANTOM_AGENT_ID = "3192622034872375"
+DATA_ENRICHER_API_KEY = "1SROua2I62PpnUfCj52i0w3Dc3X50lRNZV1BFDA62LY"
+DATA_ENRICHER_AGENT_ID = "3192622034872375"
 
 # Initialize session state
 if 'data_loaded' not in st.session_state:
@@ -36,10 +36,10 @@ if 'candidates' not in st.session_state:
     st.session_state.candidates = []
 if 'last_update' not in st.session_state:
     st.session_state.last_update = None
-if 'phantom_job_id' not in st.session_state:
-    st.session_state.phantom_job_id = None
-if 'phantom_status' not in st.session_state:
-    st.session_state.phantom_status = None
+if 'enricher_job_id' not in st.session_state:
+    st.session_state.enricher_job_id = None
+if 'enricher_status' not in st.session_state:
+    st.session_state.enricher_status = None
 if 'uploaded_data' not in st.session_state:
     st.session_state.uploaded_data = None
 
@@ -103,6 +103,36 @@ def get_sheet_data():
         traceback.print_exc()
         return []
 
+def clear_sheet():
+    """Clear all data from the spreadsheet except header row"""
+    try:
+        # Check if credentials file exists
+        if not os.path.exists("service-account-key.json"):
+            st.error("Service account key file not found")
+            return False
+            
+        # Setup credentials
+        credentials = Credentials.from_service_account_file(
+            "service-account-key.json",
+            scopes=['https://www.googleapis.com/auth/spreadsheets']
+        )
+        service = build('sheets', 'v4', credentials=credentials)
+        
+        # Clear the entire worksheet except header row
+        clear_range = "candidatos!A2:Z1000"  # Adjust range as needed
+        service.spreadsheets().values().clear(
+            spreadsheetId=SHEET_ID,
+            range=clear_range,
+            body={}
+        ).execute()
+        
+        return True
+        
+    except Exception as e:
+        st.error(f"Error clearing sheet: {e}")
+        traceback.print_exc()
+        return False
+
 def write_to_sheet(data):
     """Write data to Google Sheet"""
     try:
@@ -117,6 +147,11 @@ def write_to_sheet(data):
             scopes=['https://www.googleapis.com/auth/spreadsheets']
         )
         service = build('sheets', 'v4', credentials=credentials)
+        
+        # First clear existing data
+        clear_result = clear_sheet()
+        if not clear_result:
+            st.warning("Could not clear previous data, will append new data")
         
         # Get existing data to determine headers
         sheet_range = "candidatos!A1:Z1"
@@ -165,6 +200,7 @@ def write_to_sheet(data):
                 body=body
             ).execute()
         
+        st.session_state.last_update = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         return True
         
     except Exception as e:
@@ -172,9 +208,9 @@ def write_to_sheet(data):
         traceback.print_exc()
         return False
 
-# Functions to interact with PhantomBuster
-def launch_phantom_job(urls=None, query=None, limit=5):
-    """Launch PhantomBuster job"""
+# Functions to interact with Data Enricher
+def launch_enricher_job(urls=None, query=None, limit=5):
+    """Launch data enrichment job"""
     try:
         url = "https://api.phantombuster.com/api/v2/agents/launch"
         
@@ -182,7 +218,7 @@ def launch_phantom_job(urls=None, query=None, limit=5):
         if urls:
             # Profile scraper with URLs
             payload = {
-                "id": PHANTOM_AGENT_ID,
+                "id": DATA_ENRICHER_AGENT_ID,
                 "argument": {
                     "spreadsheetUrl": f"https://docs.google.com/spreadsheets/d/{SHEET_ID}",
                     "columnName": "linkedin_url",
@@ -192,7 +228,7 @@ def launch_phantom_job(urls=None, query=None, limit=5):
         elif query:
             # Search query
             payload = {
-                "id": PHANTOM_AGENT_ID,
+                "id": DATA_ENRICHER_AGENT_ID,
                 "argument": {
                     "spreadsheetId": SHEET_ID,
                     "numberOfProfiles": limit,
@@ -204,7 +240,7 @@ def launch_phantom_job(urls=None, query=None, limit=5):
             return None
         
         headers = {
-            "X-Phantombuster-Key": PHANTOM_API_KEY,
+            "X-Phantombuster-Key": DATA_ENRICHER_API_KEY,
             "Content-Type": "application/json"
         }
         
@@ -213,26 +249,26 @@ def launch_phantom_job(urls=None, query=None, limit=5):
         if response.status_code == 200:
             data = response.json()
             job_id = data.get("containerId")
-            st.session_state.phantom_job_id = job_id
-            st.session_state.phantom_status = "running"
+            st.session_state.enricher_job_id = job_id
+            st.session_state.enricher_status = "running"
             return job_id
         else:
-            st.error(f"Error launching PhantomBuster job: {response.status_code}")
-            st.session_state.phantom_status = "error"
+            st.error(f"Error launching data enrichment job: {response.status_code}")
+            st.session_state.enricher_status = "error"
             return None
             
     except Exception as e:
-        st.error(f"Error launching PhantomBuster job: {e}")
-        st.session_state.phantom_status = "error"
+        st.error(f"Error launching data enrichment job: {e}")
+        st.session_state.enricher_status = "error"
         return None
 
-def check_phantom_status(job_id):
-    """Check PhantomBuster job status"""
+def check_enricher_status(job_id):
+    """Check data enrichment job status"""
     try:
         url = f"https://api.phantombuster.com/api/v2/containers/fetch-output"
         
         headers = {
-            "X-Phantombuster-Key": PHANTOM_API_KEY
+            "X-Phantombuster-Key": DATA_ENRICHER_API_KEY
         }
         
         params = {"id": job_id}
@@ -244,10 +280,10 @@ def check_phantom_status(job_id):
             
             # Check for different status types
             if status == "finished":
-                st.session_state.phantom_status = "completed"
+                st.session_state.enricher_status = "completed"
                 return "completed"
             elif status == "error":
-                st.session_state.phantom_status = "error"
+                st.session_state.enricher_status = "error"
                 return "error"
             elif status == "running":
                 return "running"
@@ -255,14 +291,14 @@ def check_phantom_status(job_id):
                 return "running"  # Treat queued as still running
             elif status is None:
                 # Check container status from a different endpoint
-                container_info = get_container_info(job_id)
+                container_info = get_enricher_job_info(job_id)
                 if container_info:
                     container_status = container_info.get("status")
                     if container_status in ["finished", "succeeded"]:
-                        st.session_state.phantom_status = "completed"
+                        st.session_state.enricher_status = "completed"
                         return "completed"
                     elif container_status == "error":
-                        st.session_state.phantom_status = "error"
+                        st.session_state.enricher_status = "error"
                         return "error"
                 
                 # If we can't determine status, assume still running
@@ -275,16 +311,16 @@ def check_phantom_status(job_id):
             return "unknown"
             
     except Exception as e:
-        st.error(f"Error checking PhantomBuster status: {e}")
+        st.error(f"Error checking enrichment status: {e}")
         return "error"
 
-def get_container_info(job_id):
-    """Get container info from PhantomBuster"""
+def get_enricher_job_info(job_id):
+    """Get enrichment job info"""
     try:
         url = f"https://api.phantombuster.com/api/v2/containers/fetch"
         
         headers = {
-            "X-Phantombuster-Key": PHANTOM_API_KEY
+            "X-Phantombuster-Key": DATA_ENRICHER_API_KEY
         }
         
         params = {"id": job_id}
@@ -356,20 +392,23 @@ with tab1:
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        if st.button("Add to Spreadsheet", disabled=st.session_state.uploaded_data is None):
+        if st.button("Add to Spreadsheet (Clears Previous Data)", disabled=st.session_state.uploaded_data is None):
             with st.spinner("Adding contacts to spreadsheet..."):
-                success = write_to_sheet(st.session_state.uploaded_data)
-                if success:
-                    st.success("Contacts added to spreadsheet!")
-                    # Refresh data
-                    st.session_state.candidates = get_sheet_data()
-                else:
-                    st.error("Failed to add contacts to spreadsheet")
+                # Confirm with the user
+                st.warning("⚠️ This will clear all existing data in the spreadsheet and add the new contacts.")
+                if st.button("Confirm and Proceed"):
+                    success = write_to_sheet(st.session_state.uploaded_data)
+                    if success:
+                        st.success("✅ Previous data cleared and new contacts added to spreadsheet!")
+                        # Refresh data
+                        st.session_state.candidates = get_sheet_data()
+                    else:
+                        st.error("❌ Failed to add contacts to spreadsheet")
     
     with col2:
-        phantom_button = st.button("Enrich with PhantomBuster")
-        if phantom_button:
-            with st.spinner("Launching PhantomBuster job..."):
+        enricher_button = st.button("Enrich Data")
+        if enricher_button:
+            with st.spinner("Launching data enrichment job..."):
                 # Check if we have data to enrich
                 if not st.session_state.data_loaded and not st.session_state.candidates:
                     st.warning("⚠️ No data to enrich. Please load data first or add contacts to the spreadsheet.")
@@ -393,33 +432,33 @@ with tab1:
                             st.session_state.data_loaded = True
                             st.success("Demo data loaded successfully!")
                 else:
-                    # Launch PhantomBuster job
-                    job_id = launch_phantom_job(urls=True)
+                    # Launch enrichment job
+                    job_id = launch_enricher_job(urls=True)
                     if job_id:
-                        st.success(f"✅ PhantomBuster job launched! ID: {job_id}")
+                        st.success(f"✅ Data enrichment job launched! ID: {job_id}")
                         st.info("The job is now running. You'll see updates on the progress below.")
                         
                         # Explain what's happening
                         with st.expander("What's happening now?"):
                             st.write("""
-                            1. PhantomBuster is accessing LinkedIn profiles from your spreadsheet
+                            1. Our data enricher is accessing LinkedIn profiles from your spreadsheet
                             2. It's extracting data like skills, experience, education, etc.
                             3. The data will be written back to your Google Sheet
                             4. Once complete, the app will load the enriched data
                             """)
                     else:
-                        st.error("❌ Failed to launch PhantomBuster job")
+                        st.error("❌ Failed to launch data enrichment job")
                         
                         # Provide troubleshooting help
                         with st.expander("Troubleshooting"):
                             st.write("""
                             Possible issues:
-                            - PhantomBuster API key may be invalid
-                            - PhantomBuster Agent ID may be incorrect
+                            - API key may be invalid
+                            - Agent ID may be incorrect
                             - No LinkedIn URLs found in the spreadsheet
                             - Network connectivity issues
                             
-                            Check your PhantomBuster account to verify your API key and Agent ID.
+                            Please contact support if the issue persists.
                             """)
     
     with col3:
@@ -428,8 +467,8 @@ with tab1:
                 st.session_state.candidates = get_sheet_data()
                 st.success(f"Loaded {len(st.session_state.candidates)} candidates from sheet")
     
-    # Show phantom status if job is running
-    if st.session_state.phantom_status == "running" and st.session_state.phantom_job_id:
+    # Show enrichment job status if running
+    if st.session_state.enricher_status == "running" and st.session_state.enricher_job_id:
         status_container = st.empty()
         progress_container = st.empty()
         
@@ -448,19 +487,19 @@ with tab1:
             progress_bar.progress(progress_percent)
             
             # Check actual job status
-            status = check_phantom_status(st.session_state.phantom_job_id)
-            status_container.info(f"PhantomBuster job running... Checking status ({i}/{max_checks})")
+            status = check_enricher_status(st.session_state.enricher_job_id)
+            status_container.info(f"Data enrichment in progress... Checking status ({i}/{max_checks})")
             
             if status == "completed":
                 # Job completed successfully
                 progress_bar.progress(100)
-                status_container.success("✅ PhantomBuster job completed successfully!")
+                status_container.success("✅ Data enrichment completed successfully!")
                 
                 # Show what happens next
                 st.info("📊 Data has been enriched in your Google Sheet. The following steps are happening:")
                 steps_container = st.container()
                 with steps_container:
-                    st.write("1. ✅ LinkedIn profiles have been scraped")
+                    st.write("1. ✅ LinkedIn profiles have been processed")
                     st.write("2. ✅ Data has been written to your Google Sheet")
                     st.write("3. ⏳ Loading updated data...")
                 
@@ -481,8 +520,8 @@ with tab1:
             elif status == "error":
                 # Job failed
                 progress_bar.progress(100)
-                status_container.error("❌ PhantomBuster job failed")
-                st.error("The job failed to complete. Please check your PhantomBuster account for details.")
+                status_container.error("❌ Data enrichment job failed")
+                st.error("The job failed to complete. Please check your account for details or contact support.")
                 break
                 
             # Wait before next check
@@ -693,16 +732,16 @@ with st.sidebar:
     if st.session_state.last_update:
         st.caption(f"Last updated: {st.session_state.last_update}")
     
-    # PhantomBuster status
-    st.subheader("PhantomBuster")
-    if st.session_state.phantom_status == "running":
-        st.info("Job running...")
-    elif st.session_state.phantom_status == "completed":
-        st.success("Last job completed")
-    elif st.session_state.phantom_status == "error":
-        st.error("Last job failed")
+    # Data Enricher status
+    st.subheader("Data Enrichment Status")
+    if st.session_state.enricher_status == "running":
+        st.info("Data enrichment in progress...")
+    elif st.session_state.enricher_status == "completed":
+        st.success("Last enrichment job completed")
+    elif st.session_state.enricher_status == "error":
+        st.error("Last enrichment job failed")
     else:
-        st.write("No recent jobs")
+        st.write("No recent enrichment jobs")
     
     # Sheet link
     st.subheader("Links")
