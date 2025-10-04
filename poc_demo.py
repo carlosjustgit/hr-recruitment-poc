@@ -1892,32 +1892,31 @@ with tab2:
     st.markdown('<div id="chat-history-section"></div>', unsafe_allow_html=True)
     st.markdown("### 💬 Chat History")
     
-    # Auto-scroll to chat history after search
+    # Auto-scroll to chat history after search - always scroll if there's chat history
     if len(st.session_state.chat_history) > 0 and st.session_state.get('should_scroll', False):
+        # Use a unique key based on chat history length to ensure it runs each time
+        scroll_key = f"scroll_{len(st.session_state.chat_history)}"
         components.html(
             """
             <script>
-                // Wait for the page to load
-                window.parent.document.addEventListener('DOMContentLoaded', function() {
-                    setTimeout(function() {
-                        const chatSection = window.parent.document.getElementById('chat-history-section');
-                        if (chatSection) {
-                            chatSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                        }
-                    }, 100);
-                });
-                
-                // Also try immediately in case DOM is already loaded
-                setTimeout(function() {
+                // Function to scroll to chat section
+                function scrollToChat() {
                     const chatSection = window.parent.document.getElementById('chat-history-section');
                     if (chatSection) {
                         chatSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
                     }
-                }, 100);
+                }
+                
+                // Try multiple times to ensure it works
+                setTimeout(scrollToChat, 50);
+                setTimeout(scrollToChat, 200);
+                setTimeout(scrollToChat, 500);
             </script>
             """,
             height=0,
+            key=scroll_key
         )
+        # Reset the flag after scroll is triggered
         st.session_state.should_scroll = False
     
     if len(st.session_state.chat_history) == 0:
