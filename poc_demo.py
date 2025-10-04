@@ -56,7 +56,12 @@ DATA_ENRICHER_API_KEY = "1SROua2I62PpnUfCj52i0w3Dc3X50lRNZV1BFDA62LY"
 DATA_ENRICHER_AGENT_ID = "686901552340687"  # Updated agent ID
 
 # OpenAI Configuration (optional - if not set, falls back to keyword search)
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")  # Set this in your environment or .streamlit/secrets.toml
+# Try to get from Streamlit secrets first, then fall back to environment variable
+try:
+    OPENAI_API_KEY = st.secrets.get("OPENAI_API_KEY", os.getenv("OPENAI_API_KEY", ""))
+except:
+    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+
 USE_AI_SEARCH = bool(OPENAI_API_KEY)
 
 # Initialize OpenAI client if API key is available
@@ -64,10 +69,12 @@ openai_client = None
 if USE_AI_SEARCH:
     try:
         openai_client = OpenAI(api_key=OPENAI_API_KEY)
-        print("✓ OpenAI initialized - AI-powered search enabled")
+        print(f"✓ OpenAI initialized - AI-powered search enabled (key starts with: {OPENAI_API_KEY[:10]}...)")
     except Exception as e:
         print(f"Failed to initialize Open AI: {e}")
         USE_AI_SEARCH = False
+else:
+    print("⚠️ OpenAI API key not found - AI search will be disabled")
 
 # Initialize session state
 if 'data_loaded' not in st.session_state:
@@ -1813,6 +1820,11 @@ with tab1:
 with tab2:
     st.header("💬 Ask AI About Your Candidates")
     st.write("Chat with AI to find the perfect candidates from your enriched data")
+    
+    # Show warning if OpenAI is not available
+    if not USE_AI_SEARCH:
+        st.error("⚠️ OpenAI API key not configured! AI search is disabled. Please add OPENAI_API_KEY to your secrets.")
+        st.info("Without OpenAI, only basic keyword matching is available.")
     
     # Initialize chat history
     if 'chat_history' not in st.session_state:
