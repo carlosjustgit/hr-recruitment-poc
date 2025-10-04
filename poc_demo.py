@@ -1681,18 +1681,21 @@ with tab2:
         col_idx = idx % 3
         with cols[col_idx]:
             if st.button(suggestion, key=f"suggestion_{idx}", use_container_width=True):
-                st.session_state.search_query_input = suggestion
-                st.session_state.trigger_search = True
+                st.session_state.selected_suggestion = suggestion
+                st.rerun()
     
     st.divider()
     
     # Main chat input at the top (more prominent)
+    # Use selected suggestion if available
+    default_value = st.session_state.pop('selected_suggestion', '')
+    
     query = st.text_area(
         "Ask anything about your candidates:",
         placeholder="Example: Quien tiene experiencia en desarrollo web y habla inglés?",
         height=100,
-        key="chat_input",
-        value=st.session_state.get('search_query_input', '')
+        value=default_value,
+        key="chat_input"
     )
     
     # Send button
@@ -1702,20 +1705,12 @@ with tab2:
     with col2:
         if st.button("🗑️ Clear Chat", use_container_width=True):
             st.session_state.chat_history = []
-            st.session_state.search_query_input = ''
             st.rerun()
-    
-    # Check if search should be triggered
-    should_search = send_button or st.session_state.get('trigger_search', False)
-    
-    # Reset trigger flag
-    if 'trigger_search' in st.session_state:
-        del st.session_state.trigger_search
     
     st.divider()
     
     # Process query
-    if should_search and query:
+    if send_button and query:
         with st.spinner("Searching..."):
             # Display the search query
             search_term = query or "your search"
@@ -1882,9 +1877,6 @@ with tab2:
                     'content': ai_response,
                     'candidates': filtered_candidates[:5]
                 })
-            
-            # Clear the input for next query
-            st.session_state.search_query_input = ''
             
             # Force rerun to display the new message
             st.rerun()
