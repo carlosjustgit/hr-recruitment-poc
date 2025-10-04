@@ -15,6 +15,7 @@ import time
 from datetime import datetime
 import traceback
 import io
+import re
 
 # Import service modules
 from google.oauth2.service_account import Credentials
@@ -820,7 +821,37 @@ def get_enricher_results():
                 if agent_output and "output" in agent_output:
                     print(f"Successfully retrieved agent output")
                     
-                    # Now get the actual result data using fetch-result endpoint
+                    # CRITICAL FIX: Extract the result.json URL from the output and fetch data directly
+                    output_text = agent_output.get('output', '')
+                    
+                    # Look for the result.json URL in the output
+                    json_url_match = re.search(r'https://[^\s]+result\.json', output_text)
+                    
+                    if json_url_match:
+                        json_url = json_url_match.group(0)
+                        print(f"Found result JSON URL: {json_url}")
+                        print(f"Fetching enriched data from S3...")
+                        
+                        # Fetch the JSON data directly from S3
+                        json_response = requests.get(json_url)
+                        
+                        if json_response.status_code == 200:
+                            try:
+                                enriched_data = json_response.json()
+                                if isinstance(enriched_data, list) and len(enriched_data) > 0:
+                                    print(f"✓ Successfully retrieved {len(enriched_data)} enriched profiles from result.json")
+                                    st.session_state.enricher_results = enriched_data
+                                    return enriched_data
+                                else:
+                                    print(f"Result JSON is empty or not a list: {type(enriched_data)}")
+                            except json.JSONDecodeError:
+                                print(f"Failed to parse result.json")
+                        else:
+                            print(f"Failed to fetch result.json: {json_response.status_code}")
+                    else:
+                        print("No result.json URL found in output")
+                    
+                    # Fallback: Try the old method
                     result_url = "https://api.phantombuster.com/api/v1/agent/686901552340687/output"
                     result_response = requests.get(result_url, headers=headers)
                     
