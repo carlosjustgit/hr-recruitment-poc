@@ -214,12 +214,7 @@ EXPLANATION: [your explanation in Spanish]
 def get_sheet_data():
     """Get data from Google Sheet"""
     try:
-        # Check if credentials file exists
-        if not os.path.exists("service-account-key.json"):
-            st.error("Service account key file not found")
-            return []
-            
-        # Setup credentials
+        # Setup credentials (works both locally and on Streamlit Cloud)
         credentials = get_google_credentials()
         service = build('sheets', 'v4', credentials=credentials)
         
@@ -263,12 +258,7 @@ def get_sheet_data():
 def clear_sheet():
     """Clear all data from the spreadsheet except header row"""
     try:
-        # Check if credentials file exists
-        if not os.path.exists("service-account-key.json"):
-            st.error("Service account key file not found")
-            return False
-            
-        # Setup credentials
+        # Setup credentials (works both locally and on Streamlit Cloud)
         credentials = get_google_credentials()
         service = build('sheets', 'v4', credentials=credentials)
         
@@ -400,12 +390,7 @@ def write_to_sheet(data):
         return False
         
     try:
-        # Check if credentials file exists
-        if not os.path.exists("service-account-key.json"):
-            st.error("Service account key file not found")
-            return False
-            
-        # Setup credentials
+        # Setup credentials (works both locally and on Streamlit Cloud)
         credentials = get_google_credentials()
         service = build('sheets', 'v4', credentials=credentials)
         
