@@ -33,32 +33,45 @@ from googleapiclient.errors import HttpError
 # Setup Google credentials (works both locally and on Streamlit Cloud)
 def get_google_credentials():
     """Get Google credentials from Streamlit secrets or local file"""
-    try:
-        if "gcp_service_account" in st.secrets:
-            # Running on Streamlit Cloud - use secrets
-            print("✓ Loading Google credentials from Streamlit secrets")
-            credentials_dict = dict(st.secrets["gcp_service_account"])
-            return service_account.Credentials.from_service_account_info(
-                credentials_dict,
-                scopes=['https://www.googleapis.com/auth/spreadsheets']
-            )
-    except Exception as e:
-        print(f"⚠️ Error accessing Streamlit secrets: {e}")
+    import os
+    import traceback
     
-    # Fall back to local file
+    # First, try Streamlit secrets (for production)
     try:
-        import os
+        # Check if we're running in Streamlit Cloud environment
+        if hasattr(st, 'secrets') and st.secrets:
+            try:
+                # Try to access the gcp_service_account section
+                gcp_secrets = st.secrets.get("gcp_service_account", None)
+                if gcp_secrets:
+                    print("✓ Loading Google credentials from Streamlit secrets")
+                    credentials_dict = dict(gcp_secrets)
+                    return service_account.Credentials.from_service_account_info(
+                        credentials_dict,
+                        scopes=['https://www.googleapis.com/auth/spreadsheets']
+                    )
+            except Exception as e:
+                print(f"⚠️ Error accessing gcp_service_account from secrets: {e}")
+                traceback.print_exc()
+    except Exception as e:
+        print(f"⚠️ Streamlit secrets not available: {e}")
+    
+    # Fall back to local file (for local development)
+    try:
         if os.path.exists("service-account-key.json"):
             print("✓ Loading Google credentials from local file")
             return Credentials.from_service_account_file(
                 "service-account-key.json",
                 scopes=['https://www.googleapis.com/auth/spreadsheets']
             )
-        else:
-            raise FileNotFoundError("Google credentials not found in secrets or local file")
     except Exception as e:
-        print(f"❌ Failed to load Google credentials: {e}")
-        raise
+        print(f"⚠️ Error loading local credentials file: {e}")
+        traceback.print_exc()
+    
+    # If we get here, nothing worked
+    error_msg = "Google credentials not found in Streamlit secrets or local file"
+    print(f"❌ {error_msg}")
+    raise FileNotFoundError(error_msg)
 
 # Set page config
 st.set_page_config(page_title="HR Recruitment PoC", page_icon="🔍", layout="wide")
