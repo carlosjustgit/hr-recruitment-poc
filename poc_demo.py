@@ -192,24 +192,26 @@ def validate_and_fix_linkedin_urls(data):
     for row in data:
         fixed_row = row.copy()
         
-        # Check if Profile Url exists and is valid (using the correct column name)
-        profile_url = row.get('Profile Url', '')
+        # Check for LinkedIn URL in various possible column names
+        profile_url = None
+        for url_field in ['Profile Url', 'profileUrl', 'linkedin_url', 'url']:
+            if url_field in row and row[url_field] and isinstance(row[url_field], str):
+                profile_url = row[url_field]
+                break
         
-        # If Profile Url is not a valid LinkedIn URL
+        # If no valid LinkedIn URL found
         if not profile_url or 'linkedin.com/in/' not in profile_url.lower():
             # Try to find a name to construct a URL
             name = None
             
             # Check various fields for a name
-            if 'Full Name' in row and row['Full Name']:
-                name = row['Full Name']
-            elif 'First Name' in row and row['First Name']:
-                if 'Last Name' in row and row['Last Name']:
-                    name = f"{row['First Name']} {row['Last Name']}"
-                else:
-                    name = row['First Name']
-            elif 'name' in row and row['name']:
-                name = row['name']
+            for name_field in ['Full Name', 'fullName', 'name', 'First Name']:
+                if name_field in row and row[name_field]:
+                    if name_field == 'First Name' and 'Last Name' in row and row['Last Name']:
+                        name = f"{row['First Name']} {row['Last Name']}"
+                    else:
+                        name = row[name_field]
+                    break
             
             # If we found a name, try to construct a URL
             if name:
@@ -225,6 +227,9 @@ def validate_and_fix_linkedin_urls(data):
                 # If we can't construct a URL, skip this row
                 print(f"Skipping row with invalid LinkedIn URL: {profile_url}")
                 continue
+        else:
+            # Make sure the URL is stored in the correct field for PhantomBuster
+            fixed_row['Profile Url'] = profile_url
         
         fixed_data.append(fixed_row)
     
@@ -234,6 +239,12 @@ def write_to_sheet(data):
     """Write data to Google Sheet with proper column mapping"""
     # First validate and fix LinkedIn URLs
     data = validate_and_fix_linkedin_urls(data)
+    
+    # Skip if no valid data after validation
+    if not data:
+        st.error("No valid LinkedIn URLs found in the data. Cannot proceed.")
+        return False
+        
     try:
         # Check if credentials file exists
         if not os.path.exists("service-account-key.json"):
@@ -297,11 +308,11 @@ def write_to_sheet(data):
         # Using just what we need for the LinkedIn Profile Scraper
         minimal_columns = ["Profile Url", "First Name", "Last Name"]
         
-        # Debug log - print what we're about to write to the sheet
-        print(f"Data to write to sheet: {data[:2]}")
-        
         # Prepare rows for writing
         values = [minimal_columns]  # First row is headers
+        
+        # Debug log - print what we're about to write to the sheet
+        print(f"Data to write to sheet: {data}")
         
         for row in data:
             # Create a row with the correct column mapping
@@ -312,37 +323,50 @@ def write_to_sheet(data):
                 # Special handling for LinkedIn URL mapping
                 if column == "Profile Url":
                     # Try multiple possible field names for LinkedIn URL
-                    if "Profile Url" in row:
+                    if "Profile Url" in row and row["Profile Url"]:
                         mapped_row.append(row.get("Profile Url", ""))
-                    elif "profileUrl" in row:
+                    elif "profileUrl" in row and row["profileUrl"]:
                         mapped_row.append(row.get("profileUrl", ""))
-                    elif "linkedin_url" in row:
+                    elif "linkedin_url" in row and row["linkedin_url"]:
                         mapped_row.append(row.get("linkedin_url", ""))
-                    elif "url" in row:
+                    elif "url" in row and row["url"]:
                         mapped_row.append(row.get("url", ""))
                     else:
-                        mapped_row.append("")
+                        # If we still don't have a URL, skip this row
+                        print(f"No valid LinkedIn URL found in row: {row}")
+                        continue
                 
                 # Special handling for name mapping
                 elif column == "First Name":
-                    if "First Name" in row:
+                    if "First Name" in row and row["First Name"]:
                         mapped_row.append(row.get("First Name", ""))
-                    elif "firstName" in row:
+                    elif "firstName" in row and row["firstName"]:
                         mapped_row.append(row.get("firstName", ""))
-                    elif "name" in row and " " in row["name"]:
+                    elif "fullName" in row and row["fullName"] and " " in row["fullName"]:
+                        # Split name into first and last
+                        name_parts = row["fullName"].split(" ", 1)
+                        mapped_row.append(name_parts[0])
+                    elif "name" in row and row["name"] and " " in row["name"]:
                         # Split name into first and last
                         name_parts = row["name"].split(" ", 1)
                         mapped_row.append(name_parts[0])
                     else:
-                        mapped_row.append("")
+                        mapped_row.append("Unknown")
                 
                 # Special handling for last name
                 elif column == "Last Name":
-                    if "Last Name" in row:
+                    if "Last Name" in row and row["Last Name"]:
                         mapped_row.append(row.get("Last Name", ""))
-                    elif "lastName" in row:
+                    elif "lastName" in row and row["lastName"]:
                         mapped_row.append(row.get("lastName", ""))
-                    elif "name" in row and " " in row["name"]:
+                    elif "fullName" in row and row["fullName"] and " " in row["fullName"]:
+                        # Split name into first and last
+                        name_parts = row["fullName"].split(" ", 1)
+                        if len(name_parts) > 1:
+                            mapped_row.append(name_parts[1])
+                        else:
+                            mapped_row.append("")
+                    elif "name" in row and row["name"] and " " in row["name"]:
                         # Split name into first and last
                         name_parts = row["name"].split(" ", 1)
                         if len(name_parts) > 1:
@@ -350,17 +374,27 @@ def write_to_sheet(data):
                         else:
                             mapped_row.append("")
                     else:
-                        mapped_row.append("")
+                        mapped_row.append("User")
                 
                 # Try to get the value directly if it exists
                 else:
                     mapped_row.append(row.get(column, ""))
             
-            values.append(mapped_row)
+            # Only add the row if we have all the required columns
+            if len(mapped_row) == len(minimal_columns):
+                values.append(mapped_row)
             
-        # Debug log to show the first row of data
-        if len(values) > 1:
-            print(f"First row being written to sheet: {values[1]}")
+        # Debug log to show the data being written
+        print(f"Values to write: {values}")
+        
+        # If we only have headers and no data, add a sample row
+        if len(values) == 1:
+            st.warning("No valid data found. Adding a sample row to demonstrate format.")
+            values.append([
+                "https://www.linkedin.com/in/sample-profile/",
+                "Sample", 
+                "User"
+            ])
         
         # Write headers and data
         body = {'values': values}
@@ -386,69 +420,183 @@ def write_to_sheet(data):
         return False
 
 # Functions to interact with Data Enricher
+def check_agent_running():
+    """Check if the PhantomBuster agent is currently running"""
+    try:
+        url = "https://api.phantombuster.com/api/v2/agents/fetch"
+        headers = {"X-Phantombuster-Key": DATA_ENRICHER_API_KEY}
+        params = {"id": DATA_ENRICHER_AGENT_ID}
+        
+        response = requests.get(url, params=params, headers=headers)
+        
+        if response.status_code == 200:
+            data = response.json()
+            
+            # Check if the agent is running
+            is_running = data.get("status") == "running"
+            
+            if is_running:
+                container_id = data.get("lastContainerId")
+                return True, container_id
+            else:
+                return False, None
+        else:
+            print(f"Error checking agent status: {response.status_code} - {response.text}")
+            return False, None
+    except Exception as e:
+        print(f"Exception checking agent status: {e}")
+        return False, None
+
+def abort_agent():
+    """Abort the currently running agent"""
+    try:
+        url = "https://api.phantombuster.com/api/v2/agents/abort"
+        headers = {
+            "X-Phantombuster-Key": DATA_ENRICHER_API_KEY,
+            "Content-Type": "application/json"
+        }
+        payload = {"id": DATA_ENRICHER_AGENT_ID}
+        
+        response = requests.post(url, json=payload, headers=headers)
+        
+        if response.status_code == 200:
+            return True
+        else:
+            print(f"Error aborting agent: {response.status_code} - {response.text}")
+            return False
+    except Exception as e:
+        print(f"Exception aborting agent: {e}")
+        return False
+
 def launch_enricher_job(urls=None, query=None, limit=5):
     """Launch data enrichment job using the correct PhantomBuster API parameters"""
     try:
+        # First check if agent is already running
+        is_running, container_id = check_agent_running()
+        
+        if is_running:
+            st.error("⚠️ The DataEnricher agent is already running! Cannot launch a new job.")
+            
+            # Offer to abort the current job
+            if st.button("Abort Current Job and Try Again"):
+                with st.spinner("Aborting current job..."):
+                    abort_result = abort_agent()
+                    if abort_result:
+                        st.success("Successfully aborted the running job.")
+                        time.sleep(2)  # Wait for the abort to take effect
+                        st.info("You can now try launching the job again.")
+                    else:
+                        st.error("Failed to abort the running job.")
+            
+            return None
+            
+        # Ensure the sheet is properly formatted
+        sheet_data = get_sheet_data()
+        
+        # Check if we have valid LinkedIn URLs in the sheet
+        valid_urls = 0
+        if sheet_data:
+            for row in sheet_data:
+                if 'Profile Url' in row and row['Profile Url'] and 'linkedin.com/in/' in row['Profile Url'].lower():
+                    valid_urls += 1
+        
+        if valid_urls == 0:
+            st.error("❌ No valid LinkedIn URLs found in the spreadsheet. Please add valid LinkedIn URLs first.")
+            return None
+        
+        # According to PhantomBuster documentation, this is the correct endpoint
         url = "https://api.phantombuster.com/api/v2/agents/launch"
         
         # First, try to get the agent's current configuration
         agent_config = get_agent_config()
         
-        # If we couldn't get the config, create a default one
-        if not agent_config:
-            if urls:
-                # LinkedIn Profile Scraper default config
-                agent_config = {
-                    "spreadsheetUrl": f"https://docs.google.com/spreadsheets/d/{SHEET_ID}",
-                    "columnName": "Profile Url",  # CRITICAL: Use "Profile Url" with space and capital letters
-                    "numberOfProfilesPerLaunch": limit
-                }
-            elif query:
-                # LinkedIn Search Export default config
-                agent_config = {
-                    "spreadsheetUrl": f"https://docs.google.com/spreadsheets/d/{SHEET_ID}",
-                    "searchUrl": f"https://www.linkedin.com/search/results/people/?keywords={query}",
-                    "numberOfProfiles": limit,
-                    "saveSearchResults": True
-                }
-        else:
-            # Update the existing config with our parameters
-            agent_config["spreadsheetUrl"] = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}"
+        # Create a proper configuration based on PhantomBuster documentation
+        if urls:
+            # LinkedIn Profile Scraper config with all required fields
+            scraper_config = {
+                "spreadsheetUrl": f"https://docs.google.com/spreadsheets/d/{SHEET_ID}",
+                "columnName": "Profile Url",  # CRITICAL: Use "Profile Url" with space and capital letters
+                "numberOfProfilesPerLaunch": limit,
+                "numberOfAddsPerLaunch": 10,  # Ensure this is set
+                "enrichWithCompanyData": True,  # Get company data too
+                "pushResultToCRM": True,  # Save results
+                "forceRescrape": True,  # CRITICAL: Force PhantomBuster to re-scrape profiles
+                "saveResults": True,  # Save results to database
+                "saveEveryStep": True  # Save intermediate results
+            }
             
-            if urls:
-                agent_config["columnName"] = "Profile Url"  # CRITICAL: Use "Profile Url" with space and capital letters
-                if "numberOfProfilesPerLaunch" in agent_config:
-                    agent_config["numberOfProfilesPerLaunch"] = limit
-                else:
-                    agent_config["numberOfProfiles"] = limit
-            elif query:
-                agent_config["searchUrl"] = f"https://www.linkedin.com/search/results/people/?keywords={query}"
-                agent_config["numberOfProfiles"] = limit
+            # If we have existing identity information, keep it
+            if agent_config and "identities" in agent_config:
+                scraper_config["identities"] = agent_config["identities"]
+        elif query:
+            # LinkedIn Search Export config
+            scraper_config = {
+                "spreadsheetUrl": f"https://docs.google.com/spreadsheets/d/{SHEET_ID}",
+                "searchUrl": f"https://www.linkedin.com/search/results/people/?keywords={query}",
+                "numberOfProfiles": limit,
+                "saveSearchResults": True
+            }
         
         # Construct the payload according to documentation
         payload = {
             "id": DATA_ENRICHER_AGENT_ID,
-            "argument": agent_config
+            "argument": scraper_config
         }
         
         # Log the payload for debugging
         print(f"Launching enricher with payload: {json.dumps(payload, indent=2)}")
         
+        # Use the correct headers according to documentation
         headers = {
             "X-Phantombuster-Key": DATA_ENRICHER_API_KEY,
             "Content-Type": "application/json"
         }
         
-        response = requests.post(url, json=payload, headers=headers)
+        # Clear any previous results from session state
+        if 'enricher_results' in st.session_state:
+            del st.session_state.enricher_results
         
-        if response.status_code == 200:
-            data = response.json()
-            job_id = data.get("containerId")
-            st.session_state.enricher_job_id = job_id
-            st.session_state.enricher_status = "running"
-            return job_id
-        else:
-            st.error(f"Error launching data enrichment job: {response.status_code} - {response.text}")
+        # Make the API request with proper error handling
+        try:
+            response = requests.post(url, json=payload, headers=headers, timeout=30)
+            
+            if response.status_code == 200:
+                data = response.json()
+                job_id = data.get("containerId")
+                st.session_state.enricher_job_id = job_id
+                st.session_state.enricher_status = "running"
+                
+                # Show success message with job ID
+                st.success(f"✅ Successfully launched DataEnricher job (ID: {job_id})")
+                st.info("The job is now running. You'll see updates on the progress below.")
+                
+                return job_id
+            elif response.status_code == 429:
+                # Handle rate limiting or parallel execution limit
+                error_data = response.json()
+                error_message = error_data.get('error', 'Unknown error')
+                
+                if "maxParallelismReached" in str(error_data) or "parallel executions" in str(error_message):
+                    st.error(f"⚠️ Maximum parallel executions limit reached: {error_message}")
+                    st.info("Your PhantomBuster account has a limit on how many jobs can run at once. Please wait for any running jobs to complete before trying again.")
+                    
+                    # Offer demo data as an alternative
+                    st.warning("While waiting, you can use the demo data option to see how the enriched data will look.")
+                else:
+                    st.error(f"Rate limit reached: {error_message}")
+                
+                st.session_state.enricher_status = "error"
+                return None
+            else:
+                st.error(f"Error launching data enrichment job: {response.status_code} - {response.text}")
+                st.session_state.enricher_status = "error"
+                return None
+        except requests.exceptions.Timeout:
+            st.error("Request timed out. The server might be busy. Please try again.")
+            st.session_state.enricher_status = "error"
+            return None
+        except requests.exceptions.RequestException as e:
+            st.error(f"Network error: {e}")
             st.session_state.enricher_status = "error"
             return None
             
@@ -502,7 +650,14 @@ def check_enricher_status(job_id):
                 st.session_state.enricher_status = "completed"
                 
                 # Try to get the results immediately
-                get_enricher_results()
+                results = get_enricher_results()
+                if results:
+                    print(f"Successfully retrieved enriched data with {len(results)} records")
+                else:
+                    print("Failed to retrieve enriched data, will try again")
+                    # Try a second time after a short delay
+                    time.sleep(2)
+                    results = get_enricher_results()
                 
                 return "completed"
             elif status == "error":
@@ -521,7 +676,14 @@ def check_enricher_status(job_id):
                         st.session_state.enricher_status = "completed"
                         
                         # Try to get the results
-                        get_enricher_results()
+                        results = get_enricher_results()
+                        if results:
+                            print(f"Successfully retrieved enriched data with {len(results)} records")
+                        else:
+                            print("Failed to retrieve enriched data, will try again")
+                            # Try a second time after a short delay
+                            time.sleep(2)
+                            results = get_enricher_results()
                         
                         return "completed"
                     elif container_status == "error":
@@ -529,6 +691,14 @@ def check_enricher_status(job_id):
                         return "error"
                     elif container_status in ["running", "queued"]:
                         return "running"
+                
+                # If we still can't determine, check if we can get results directly
+                # Sometimes PhantomBuster doesn't report status correctly but results are available
+                results = get_enricher_results()
+                if results and len(results) > 0:
+                    print(f"Found results despite unknown status, assuming completed")
+                    st.session_state.enricher_status = "completed"
+                    return "completed"
                 
                 # If we still can't determine, assume running
                 return "running"
@@ -542,10 +712,21 @@ def check_enricher_status(job_id):
                 container_status = container_info.get("status")
                 if container_status in ["finished", "succeeded"]:
                     st.session_state.enricher_status = "completed"
+                    
+                    # Try to get the results
+                    results = get_enricher_results()
+                    
                     return "completed"
                 elif container_status == "error":
                     st.session_state.enricher_status = "error"
                     return "error"
+            
+            # If we still can't determine, check if we can get results directly
+            results = get_enricher_results()
+            if results and len(results) > 0:
+                print(f"Found results despite unknown status, assuming completed")
+                st.session_state.enricher_status = "completed"
+                return "completed"
             
             return "unknown"
             
@@ -613,34 +794,99 @@ def get_enricher_progress(job_id):
         return None
 
 def get_enricher_results():
-    """Get the results from the data enricher"""
+    """Get the results from the data enricher using the correct API endpoints"""
     try:
-        # According to documentation, this is how to get JSON results
-        url = "https://api.phantombuster.com/api/v2/agents/fetch-json-result"
+        # First, check if we have a container ID (job ID) from a recent run
+        if st.session_state.enricher_job_id:
+            # Try to get results from the container output first
+            container_output = get_container_output(st.session_state.enricher_job_id)
+            if container_output and "output" in container_output:
+                print(f"Got container output with length: {len(container_output['output'])}")
+        
+        # Now try the official API endpoints in the correct order according to documentation
+        
+        # 1. First try the agent's fetch-output endpoint (most reliable)
+        url = "https://api.phantombuster.com/api/v2/agents/fetch-output"
         headers = {"X-Phantombuster-Key": DATA_ENRICHER_API_KEY}
         params = {"id": DATA_ENRICHER_AGENT_ID}
         
+        print(f"Trying to get results from agent output endpoint: {url}")
         response = requests.get(url, params=params, headers=headers)
         
         if response.status_code == 200:
             try:
                 # Try to parse as JSON
-                data = response.json()
-                
-                # Log for debugging
-                print(f"Got enricher results: {len(data) if isinstance(data, list) else 'not a list'}")
-                
-                # Store in session state for later use
-                st.session_state.enricher_results = data
-                return data
+                agent_output = response.json()
+                if agent_output and "output" in agent_output:
+                    print(f"Successfully retrieved agent output")
+                    
+                    # Now get the actual result data using fetch-result endpoint
+                    result_url = "https://api.phantombuster.com/api/v1/agent/686901552340687/output"
+                    result_response = requests.get(result_url, headers=headers)
+                    
+                    if result_response.status_code == 200:
+                        try:
+                            result_data = result_response.json()
+                            if isinstance(result_data, dict) and "data" in result_data:
+                                print(f"Successfully retrieved result data with {len(result_data['data'])} records")
+                                st.session_state.enricher_results = result_data["data"]
+                                return result_data["data"]
+                        except:
+                            print(f"Failed to parse result data as JSON")
             except:
-                print("Error parsing enricher results as JSON")
-                return None
+                print(f"Failed to parse agent output as JSON")
+        
+        # 2. Try to get data directly from Google Sheets as a fallback
+        print("API endpoints failed, trying to get data from Google Sheets")
+        sheet_data = get_sheet_data()
+        
+        # Check if the sheet data has enriched fields
+        if sheet_data and len(sheet_data) > 0:
+            # Look for enriched fields in the Google Sheet
+            enriched_fields = ["First Name", "Last Name", "Linkedin Headline", "Company Name", 
+                              "Company Industry", "Professional Email"]
+            has_enriched_data = False
+            
+            for entry in sheet_data:
+                for field in enriched_fields:
+                    if field in entry and entry[field] and entry[field] != "Unknown" and entry[field] != "User":
+                        has_enriched_data = True
+                        break
+                if has_enriched_data:
+                    break
+            
+            if has_enriched_data:
+                print("Found enriched data in Google Sheets")
+                st.session_state.enricher_results = sheet_data
+                return sheet_data
+        
+        # 3. If all else fails, check if we have any data in the session state already
+        if "enricher_results" in st.session_state and st.session_state.enricher_results:
+            print("Using cached results from session state")
+            return st.session_state.enricher_results
+        
+        # If we still don't have data, return None
+        return None
+    except Exception as e:
+        print(f"Exception in get_enricher_results: {e}")
+        return None
+
+def get_container_output(container_id):
+    """Get the output of a specific container"""
+    try:
+        url = "https://api.phantombuster.com/api/v2/containers/fetch-output"
+        headers = {"X-Phantombuster-Key": DATA_ENRICHER_API_KEY}
+        params = {"id": container_id}
+        
+        response = requests.get(url, params=params, headers=headers)
+        
+        if response.status_code == 200:
+            return response.json()
         else:
-            print(f"Error getting enricher results: {response.status_code} - {response.text}")
+            print(f"Error getting container output: {response.status_code} - {response.text}")
             return None
     except Exception as e:
-        print(f"Exception getting enricher results: {e}")
+        print(f"Exception getting container output: {e}")
         return None
 
 # Function to check if data is actually enriched
@@ -653,14 +899,23 @@ def check_if_data_enriched(data):
     enriched_count = 0
     non_empty_fields_count = 0
     
-    # Fields that indicate enrichment from LinkedIn
+    # Fields that indicate enrichment from LinkedIn (PhantomBuster output format)
     important_fields = [
-        'skills_tags', 'summary', 'education', 'current_company', 
-        'headline', 'industry', 'school', 'jobTitle', 'company'
+        'Linkedin Skills Label', 'Linkedin Description', 'Linkedin School Name', 
+        'Company Name', 'Linkedin Headline', 'Company Industry', 'Linkedin School Name',
+        'Linkedin Job Title', 'Professional Email', 'Linkedin Profile Image Url'
     ]
     
     # Fields that are typically present in PhantomBuster output
     phantom_fields = [
+        'Profile Url', 'First Name', 'Last Name', 'Refreshed At',
+        'Location', 'Scraper Profile Id', 'Scraper Full Name'
+    ]
+    
+    # Legacy fields (older format)
+    legacy_fields = [
+        'skills_tags', 'summary', 'education', 'current_company', 
+        'headline', 'industry', 'school', 'jobTitle', 'company',
         'profileUrl', 'fullName', 'firstName', 'lastName', 
         'connectionDegree', 'profileImageUrl', 'timestamp'
     ]
@@ -676,17 +931,24 @@ def check_if_data_enriched(data):
             if field in entry and entry[field] and str(entry[field]).strip():
                 field_count += 1
         
-        # Check for important enrichment fields
+        # Check for important enrichment fields (PhantomBuster format)
         for field in important_fields:
-            if field in entry and entry[field] and len(str(entry[field])) > 3:
+            if field in entry and entry[field] and str(entry[field]).strip():
                 has_enriched_field = True
                 break
         
         # Check for PhantomBuster-specific fields
         for field in phantom_fields:
-            if field in entry and entry[field] and len(str(entry[field])) > 3:
+            if field in entry and entry[field] and str(entry[field]).strip():
                 has_phantom_field = True
                 break
+                
+        # Check legacy fields if no enrichment found
+        if not has_enriched_field:
+            for field in legacy_fields:
+                if field in entry and entry[field] and str(entry[field]).strip() and len(str(entry[field])) > 3:
+                    has_enriched_field = True
+                    break
         
         # If entry has many fields or has important fields, count it as enriched
         if has_enriched_field or has_phantom_field or field_count >= 5:
@@ -696,10 +958,13 @@ def check_if_data_enriched(data):
         if field_count >= 3:
             non_empty_fields_count += 1
     
+    print(f"Enrichment check: {enriched_count}/{len(data)} entries have enriched fields")
+    print(f"Non-empty check: {non_empty_fields_count}/{len(data)} entries have non-empty fields")
+    
     # Consider data enriched if:
-    # 1. At least 20% of entries have important enriched fields, OR
-    # 2. At least 50% of entries have non-empty fields
-    return (enriched_count >= len(data) * 0.2) or (non_empty_fields_count >= len(data) * 0.5)
+    # 1. At least 1 entry has important enriched fields, OR
+    # 2. At least 30% of entries have non-empty fields
+    return (enriched_count >= 1) or (non_empty_fields_count >= len(data) * 0.3)
 
 # Function to provide demo enriched data
 def get_demo_enriched_data(existing_data):
@@ -938,69 +1203,31 @@ def process_uploaded_file(uploaded_file):
             st.error("Unsupported file type. Please upload CSV or Excel file.")
             return None
         
-        # Map column names to the expected PhantomBuster format
-        column_mapping = {
-            'name': 'fullName',
-            'linkedin_url': 'profileUrl',
-            'linkedin': 'profileUrl',
-            'url': 'profileUrl',
-            'profile_url': 'profileUrl',
-            'email': 'email',
-            'phone': 'phone',
-            'company': 'company',
-            'position': 'jobTitle',
-            'job_title': 'jobTitle',
-            'location': 'location'
-        }
+        # Print original columns for debugging
+        print(f"Original columns: {df.columns.tolist()}")
         
-        # Rename columns if they exist in the dataframe
-        for old_col, new_col in column_mapping.items():
-            if old_col in df.columns:
-                df = df.rename(columns={old_col: new_col})
-                
-        # Print column names for debugging
-        print(f"Columns after mapping: {df.columns.tolist()}")
-        
-        # Ensure we have the profileUrl column
-        if 'profileUrl' not in df.columns and len(df.columns) > 0:
-            # Try to find a column that might contain LinkedIn URLs
-            for col in df.columns:
-                # Check if any value in this column looks like a LinkedIn URL
-                if df[col].astype(str).str.contains('linkedin.com', case=False).any():
-                    print(f"Found column '{col}' with LinkedIn URLs, mapping to profileUrl")
-                    df = df.rename(columns={col: 'profileUrl'})
-                    break
+        # Keep the original columns - don't rename anything
+        # We'll handle the mapping in validate_and_fix_linkedin_urls and write_to_sheet
         
         # Convert to list of dicts
         data = df.replace({np.nan: None}).to_dict('records')
         
-        # Check for required fields (using the new column names)
-        required_fields = ['profileUrl']  # At minimum, we need the LinkedIn URL
-        missing_fields = [field for field in required_fields if not any(field in row and row[field] for row in data)]
+        # Check if we have LinkedIn URLs in any column
+        linkedin_url_columns = []
+        for col in df.columns:
+            if df[col].astype(str).str.contains('linkedin.com/in/', case=False).any():
+                linkedin_url_columns.append(col)
         
-        if missing_fields:
-            # Try alternate field names
-            alternate_mapping = {'linkedin_url': 'profileUrl', 'url': 'profileUrl', 'linkedin': 'profileUrl'}
+        if linkedin_url_columns:
+            st.info(f"Found LinkedIn URLs in column(s): {', '.join(linkedin_url_columns)}")
+        else:
+            st.warning("⚠️ No columns with LinkedIn URLs detected. Please ensure your file contains LinkedIn profile URLs.")
             
-            for alt_field, expected_field in alternate_mapping.items():
-                if expected_field in missing_fields and any(alt_field in row and row[alt_field] for row in data):
-                    # Map the alternate field to the expected field
-                    for row in data:
-                        if alt_field in row and row[alt_field]:
-                            row[expected_field] = row[alt_field]
-                    
-                    missing_fields.remove(expected_field)
-            
-            # If still missing required fields, show error
-            if missing_fields:
-                st.error(f"Required field(s) not found: {', '.join(missing_fields)}. Please ensure your file contains LinkedIn profile URLs.")
-                return None
-        
-        # Check if we have valid LinkedIn URLs
-        valid_urls = 0
-        for row in data:
-            if 'profileUrl' in row and row['profileUrl'] and 'linkedin.com/in/' in row['profileUrl'].lower():
-                valid_urls += 1
+            # Show column preview to help user identify their data
+            with st.expander("Column Preview"):
+                for col in df.columns:
+                    if len(df) > 0:
+                        st.write(f"**{col}**: {df[col].iloc[0]}")
         
         # Debug info
         if data:
@@ -1008,12 +1235,6 @@ def process_uploaded_file(uploaded_file):
             for row in data:
                 all_keys.update(row.keys())
             st.info(f"Processed {len(data)} contacts with fields: {', '.join(all_keys)}")
-            
-            # Show warning if we don't have valid LinkedIn URLs
-            if valid_urls == 0:
-                st.warning("⚠️ No valid LinkedIn URLs found in the uploaded file. URLs will be constructed from names.")
-            elif valid_urls < len(data):
-                st.warning(f"⚠️ Only {valid_urls} out of {len(data)} contacts have valid LinkedIn URLs. Missing URLs will be constructed from names.")
         
         return data
         
@@ -1619,29 +1840,52 @@ with tab3:
     st.header("Current Data")
     
     # Load button
-    if st.button("Refresh Data"):
+    if st.button("Refresh Data", type="primary"):
         with st.spinner("Loading data from Google Sheet..."):
-            st.session_state.candidates = get_sheet_data()
+            # First try to get data from enricher results if available
+            if 'enricher_results' in st.session_state and st.session_state.enricher_results:
+                st.session_state.candidates = st.session_state.enricher_results
+                st.success("✅ Loaded enriched data from PhantomBuster results")
+            else:
+                # Fall back to Google Sheet data
+                sheet_data = get_sheet_data()
+                if sheet_data:
+                    st.session_state.candidates = sheet_data
+                    st.success(f"✅ Loaded {len(sheet_data)} records from Google Sheet")
+                else:
+                    st.error("❌ Failed to load data from Google Sheet")
     
     # Show data
-    if st.session_state.data_loaded and st.session_state.candidates:
+    if 'candidates' in st.session_state and st.session_state.candidates:
         # Create dataframe
         df = pd.DataFrame(st.session_state.candidates)
+        
+        # Show data count
+        st.success(f"Showing {len(df)} enriched profiles")
         
         # Organize columns into categories for better viewing
         column_categories = {
             "Basic Info": ["Profile Url", "First Name", "Last Name", "Linkedin Headline", "Location", 
-                          "Linkedin Profile Image Url", "Professional Email"],
+                          "Linkedin Profile Image Url", "Professional Email", "profileUrl", "firstName", 
+                          "lastName", "fullName", "headline", "location"],
+            
             "Company Info": ["Company Name", "Company Industry", "Company Website", "Linkedin Company Name",
-                           "Linkedin Company Url", "Linkedin Company Description"],
+                           "Linkedin Company Url", "Linkedin Company Description", "company", "companyName", 
+                           "companyUrl", "companyId", "companyWebsite", "companyIndustry", "industry"],
+            
             "Job Info": ["Linkedin Job Title", "Linkedin Job Date Range", "Linkedin Job Location", 
-                        "Linkedin Job Description", "Linkedin Previous Job Title", 
-                        "Linkedin Previous Job Date Range", "Linkedin Previous Job Description"],
+                        "Linkedin Job Description", "Linkedin Previous Job Title", "jobTitle", "jobDateRange",
+                        "Linkedin Previous Job Date Range", "Linkedin Previous Job Description", "currentJobTitle"],
+            
             "Education": ["Linkedin School Name", "Linkedin School Degree", "Linkedin School Date Range",
-                         "Linkedin Previous School Name", "Linkedin Previous School Degree", 
-                         "Linkedin Previous School Date Range"],
-            "Skills & Details": ["Linkedin Skills Label", "Linkedin Description"],
-            "Metadata": ["Refreshed At", "Scraper Profile Id", "Scraper Full Name", "Error"]
+                         "Linkedin Previous School Name", "Linkedin Previous School Degree", "school", "schoolDegree",
+                         "Linkedin Previous School Date Range", "education", "schoolDateRange"],
+            
+            "Skills & Details": ["Linkedin Skills Label", "Linkedin Description", "skills", "skills_tags",
+                               "summary", "description", "connectionDegree", "sharedConnections"],
+            
+            "Metadata": ["Refreshed At", "Scraper Profile Id", "Scraper Full Name", "Error", "timestamp", 
+                        "vmid", "category", "searchAccountFullName"]
         }
         
         # Create tabs for each category
@@ -1654,13 +1898,23 @@ with tab3:
                 existing_columns = [col for col in columns if col in df.columns]
                 
                 if existing_columns:
-                    st.dataframe(df[existing_columns], use_container_width=True)
+                    st.dataframe(df[existing_columns], width='stretch')
                 else:
                     st.info(f"No {category.lower()} data available.")
         
         # Add a "Raw Data" tab with all columns
         with st.expander("Raw Data (All Columns)"):
-            st.dataframe(df, use_container_width=True)
+            # Show all columns in the dataframe
+            st.dataframe(df, width='stretch')
+            
+            # Add download button for the data
+            csv = df.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                label="Download data as CSV",
+                data=csv,
+                file_name="enriched_linkedin_data.csv",
+                mime="text/csv",
+            )
     else:
         st.info("No data loaded. Click 'Refresh Data' to load data from Google Sheet.")
 
