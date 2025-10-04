@@ -1499,8 +1499,16 @@ with tab1:
                 progress_bar.progress(100)
                 status_container.success("✅ Data enrichment job completed!")
                 
-                # Actually refresh the data
-                updated_data = get_sheet_data()
+                # CRITICAL FIX: Get data from PhantomBuster results, NOT from Google Sheet
+                # The enriched data is already stored in enricher_results by get_enricher_results()
+                if 'enricher_results' in st.session_state and st.session_state.enricher_results:
+                    updated_data = st.session_state.enricher_results
+                    st.session_state.candidates = updated_data  # Store it in candidates for display
+                    print(f"Using PhantomBuster enriched data with {len(updated_data)} profiles")
+                else:
+                    # Fallback to Google Sheet only if PhantomBuster data is not available
+                    updated_data = get_sheet_data()
+                    print(f"Falling back to Google Sheet data")
                 
                 # Check if data is actually enriched
                 is_enriched = check_if_data_enriched(updated_data)
