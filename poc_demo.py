@@ -1596,47 +1596,135 @@ with tab1:
             # Wait before next check
             time.sleep(check_interval)
 
-# Tab 2: Search Candidates
+# Tab 2: Search Candidates (AI Chat Interface)
 with tab2:
-    st.header("Search Candidates")
+    st.header("💬 Ask AI About Your Candidates")
+    st.write("Chat with AI to find the perfect candidates from your enriched data")
     
-    # Function to set search query and trigger search
-    def set_search_query(query_text):
-        st.session_state.search_query = query_text
-        st.session_state.do_search = True
+    # Initialize chat history
+    if 'chat_history' not in st.session_state:
+        st.session_state.chat_history = []
     
-    # Search box
-    query = st.text_input("Search:", placeholder="Example: Quien tiene magíster en finanzas?")
+    # Get current candidates data
+    current_candidates = st.session_state.candidates if st.session_state.data_loaded and st.session_state.candidates else []
     
-    # Search suggestions
-    if not query:
-        st.info("Try these searches:")
-        col1, col2 = st.columns(2)
+    # Generate dynamic suggestions based on actual data
+    def generate_dynamic_suggestions(candidates):
+        """Generate search suggestions based on actual candidate data"""
+        if not candidates or len(candidates) == 0:
+            return [
+                "Quien tiene magíster en finanzas?",
+                "Quien trabajó en marketing digital?",
+                "Quien tiene experiencia en minería?",
+                "Quien tiene experiencia en análisis de riesgo?",
+                "Quien tiene skills en Python y data science?",
+                "Quien trabajó en startups chilenas?"
+            ]
         
-        with col1:
-            if st.button("Quien tiene magíster en finanzas?", key="btn1"):
-                set_search_query("Quien tiene magíster en finanzas?")
-                st.rerun()
-            if st.button("Quien trabajó en marketing digital?", key="btn2"):
-                set_search_query("Quien trabajó en marketing digital?")
-                st.rerun()
-            if st.button("Quien tiene experiencia en minería?", key="btn3"):
-                set_search_query("Quien tiene experiencia en minería?")
-                st.rerun()
+        suggestions = []
         
-        with col2:
-            if st.button("Quien tiene experiencia en análisis de riesgo?", key="btn4"):
-                set_search_query("Quien tiene experiencia en análisis de riesgo?")
-                st.rerun()
-            if st.button("Quien tiene skills en Python y data science?", key="btn5"):
-                set_search_query("Quien tiene skills en Python y data science?")
-                st.rerun()
-            if st.button("Quien trabajó en startups chilenas?", key="btn6"):
-                set_search_query("Quien trabajó en startups chilenas?")
+        # Extract common skills, companies, and education from the data
+        all_skills = set()
+        all_companies = set()
+        all_education = set()
+        
+        for candidate in candidates[:10]:  # Check first 10 candidates
+            # Skills
+            for skill_field in ['skills_tags', 'Linkedin Skills Label', 'linkedinSkillsLabel']:
+                if skill_field in candidate and candidate[skill_field]:
+                    skills = str(candidate[skill_field]).split(',')
+                    all_skills.update([s.strip().lower() for s in skills[:3]])
+            
+            # Companies
+            for company_field in ['Company Name', 'companyName', 'current_company']:
+                if company_field in candidate and candidate[company_field]:
+                    all_companies.add(str(candidate[company_field]).strip())
+            
+            # Education
+            for edu_field in ['Linkedin School Degree', 'linkedinSchoolDegree', 'education']:
+                if edu_field in candidate and candidate[edu_field]:
+                    all_education.add(str(candidate[edu_field]).strip())
+        
+        # Create dynamic suggestions
+        if all_skills:
+            top_skills = list(all_skills)[:2]
+            if top_skills:
+                suggestions.append(f"Quien tiene experiencia en {top_skills[0]}?")
+        
+        if all_companies:
+            top_companies = list(all_companies)[:1]
+            if top_companies:
+                suggestions.append(f"Quien trabajó en {top_companies[0]}?")
+        
+        if all_education:
+            suggestions.append("Quien tiene estudios de posgrado?")
+        
+        # Add some generic but useful ones
+        suggestions.extend([
+            "Muéstrame los candidatos más calificados",
+            "Quien tiene más de 5 años de experiencia?",
+            "Resumen de los perfiles disponibles"
+        ])
+        
+        return suggestions[:6]
+    
+    # Display chat history
+    chat_container = st.container()
+    with chat_container:
+        for message in st.session_state.chat_history:
+            if message['role'] == 'user':
+                st.markdown(f"**🧑 You:** {message['content']}")
+            else:
+                st.markdown(f"**🤖 AI:** {message['content']}")
+                if 'candidates' in message and message['candidates']:
+                    with st.expander(f"📋 {len(message['candidates'])} matching candidates"):
+                        for i, candidate in enumerate(message['candidates'][:5]):
+                            name = candidate.get('Full Name', candidate.get('firstName', 'Unknown'))
+                            if not name or name == 'Unknown':
+                                name = f"{candidate.get('firstName', '')} {candidate.get('lastName', '')}".strip()
+                            headline = candidate.get('Linkedin Headline', candidate.get('linkedinHeadline', candidate.get('headline', 'No headline')))
+                            st.write(f"**{i+1}. {name}** - {headline}")
+    
+    st.divider()
+    
+    # Suggestions section
+    suggestions = generate_dynamic_suggestions(current_candidates)
+    
+    st.markdown("### 💡 Try these searches:")
+    cols = st.columns(3)
+    for idx, suggestion in enumerate(suggestions):
+        col_idx = idx % 3
+        with cols[col_idx]:
+            if st.button(suggestion, key=f"suggestion_{idx}", use_container_width=True):
+                st.session_state.pending_query = suggestion
                 st.rerun()
     
-    # Show results if query or search button is clicked
-    if query or st.button("Search"):
+    st.divider()
+    
+    # Main chat input (more prominent)
+    query = st.text_area(
+        "Ask anything about your candidates:",
+        placeholder="Example: Quien tiene experiencia en desarrollo web y habla inglés?",
+        height=100,
+        key="chat_input"
+    )
+    
+    # Handle pending query from button clicks
+    if 'pending_query' in st.session_state:
+        query = st.session_state.pending_query
+        del st.session_state.pending_query
+    
+    # Send button
+    col1, col2, col3 = st.columns([1, 1, 4])
+    with col1:
+        send_button = st.button("🔍 Search", type="primary", use_container_width=True)
+    with col2:
+        if st.button("🗑️ Clear Chat", use_container_width=True):
+            st.session_state.chat_history = []
+            st.rerun()
+    
+    # Process query
+    if send_button and query:
         with st.spinner("Searching..."):
             # Display the search query
             search_term = query or "your search"
@@ -1782,7 +1870,32 @@ with tab2:
                 for candidate in filtered_candidates:
                     candidate['match_score'] = 1
             
-            # Display results
+            # Add user message to chat history
+            st.session_state.chat_history.append({
+                'role': 'user',
+                'content': search_term
+            })
+            
+            # Generate AI response
+            if len(filtered_candidates) == 0:
+                ai_response = f"No encontré candidatos que coincidan con '{search_term}'. Intenta con otros criterios de búsqueda."
+                st.session_state.chat_history.append({
+                    'role': 'assistant',
+                    'content': ai_response,
+                    'candidates': []
+                })
+            else:
+                ai_response = f"Encontré {len(filtered_candidates)} candidatos que coinciden con tu búsqueda. Aquí están los más relevantes:"
+                st.session_state.chat_history.append({
+                    'role': 'assistant',
+                    'content': ai_response,
+                    'candidates': filtered_candidates[:5]
+                })
+            
+            # Force rerun to display the new message
+            st.rerun()
+            
+            # Display results (kept for backward compatibility, but will be in chat history after rerun)
             st.success(f"Found {len(filtered_candidates)} candidates matching '{search_term}'")
             
             # Results
