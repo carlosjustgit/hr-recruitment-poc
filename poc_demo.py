@@ -41,15 +41,22 @@ def get_google_credentials():
         # Check if we're running in Streamlit Cloud environment
         if hasattr(st, 'secrets') and st.secrets:
             try:
+                # Debug: print what keys are available in secrets
+                print(f"DEBUG: Available secrets keys: {list(st.secrets.keys())}")
+                
                 # Try to access the gcp_service_account section
-                gcp_secrets = st.secrets.get("gcp_service_account", None)
-                if gcp_secrets:
-                    print("✓ Loading Google credentials from Streamlit secrets")
+                if "gcp_service_account" in st.secrets:
+                    print("✓ Found gcp_service_account in secrets")
+                    gcp_secrets = st.secrets["gcp_service_account"]
+                    print(f"DEBUG: gcp_service_account type: {type(gcp_secrets)}")
                     credentials_dict = dict(gcp_secrets)
+                    print("✓ Loading Google credentials from Streamlit secrets")
                     return service_account.Credentials.from_service_account_info(
                         credentials_dict,
                         scopes=['https://www.googleapis.com/auth/spreadsheets']
                     )
+                else:
+                    print("⚠️ gcp_service_account NOT found in secrets")
             except Exception as e:
                 print(f"⚠️ Error accessing gcp_service_account from secrets: {e}")
                 traceback.print_exc()
