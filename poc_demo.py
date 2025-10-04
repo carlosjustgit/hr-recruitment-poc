@@ -26,8 +26,26 @@ load_dotenv()
 
 # Import service modules
 from google.oauth2.service_account import Credentials
+from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
+
+# Setup Google credentials (works both locally and on Streamlit Cloud)
+def get_google_credentials():
+    """Get Google credentials from Streamlit secrets or local file"""
+    if "gcp_service_account" in st.secrets:
+        # Running on Streamlit Cloud - use secrets
+        credentials_dict = dict(st.secrets["gcp_service_account"])
+        return service_account.Credentials.from_service_account_info(
+            credentials_dict,
+            scopes=['https://www.googleapis.com/auth/spreadsheets']
+        )
+    else:
+        # Running locally - use file
+        return Credentials.from_service_account_file(
+            "service-account-key.json",
+            scopes=['https://www.googleapis.com/auth/spreadsheets']
+        )
 
 # Set page config
 st.set_page_config(page_title="HR Recruitment PoC", page_icon="🔍", layout="wide")
@@ -202,10 +220,7 @@ def get_sheet_data():
             return []
             
         # Setup credentials
-        credentials = Credentials.from_service_account_file(
-            "service-account-key.json",
-            scopes=['https://www.googleapis.com/auth/spreadsheets']
-        )
+        credentials = get_google_credentials()
         service = build('sheets', 'v4', credentials=credentials)
         
         # Get data from sheet
@@ -254,10 +269,7 @@ def clear_sheet():
             return False
             
         # Setup credentials
-        credentials = Credentials.from_service_account_file(
-            "service-account-key.json",
-            scopes=['https://www.googleapis.com/auth/spreadsheets']
-        )
+        credentials = get_google_credentials()
         service = build('sheets', 'v4', credentials=credentials)
         
         # First check if the worksheet exists
@@ -394,10 +406,7 @@ def write_to_sheet(data):
             return False
             
         # Setup credentials
-        credentials = Credentials.from_service_account_file(
-            "service-account-key.json",
-            scopes=['https://www.googleapis.com/auth/spreadsheets']
-        )
+        credentials = get_google_credentials()
         service = build('sheets', 'v4', credentials=credentials)
         
         # First check if the worksheet exists
