@@ -16,8 +16,13 @@ from datetime import datetime
 import traceback
 import io
 import re
+import hashlib
 import streamlit.components.v1 as components
 from openai import OpenAI
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # Import service modules
 from google.oauth2.service_account import Credentials
@@ -59,6 +64,10 @@ if 'enricher_status' not in st.session_state:
     st.session_state.enricher_status = None
 if 'uploaded_data' not in st.session_state:
     st.session_state.uploaded_data = None
+if 'last_enriched_urls_hash' not in st.session_state:
+    st.session_state.last_enriched_urls_hash = None
+if 'last_result_json_url' not in st.session_state:
+    st.session_state.last_result_json_url = None
 
 # Title and description
 st.title("HR Recruitment Agent - PoC")
@@ -66,6 +75,33 @@ st.markdown("Upload contacts, enrich data, and search candidates using natural l
 
 # Warning banner
 st.warning("⚠️ **PROOF OF CONCEPT**: This is a demo to showcase the functionality. In production, data sources will be official and consented.")
+
+# Helper function to create hash of URLs
+def create_urls_hash(urls_list):
+    """Create a hash of LinkedIn URLs to detect if we're processing the same data"""
+    if not urls_list:
+        return None
+    
+    # Sort URLs to ensure consistent hashing even if order changes
+    sorted_urls = sorted([url.strip().lower() for url in urls_list if url])
+    
+    # Create hash
+    urls_string = "|".join(sorted_urls)
+    return hashlib.md5(urls_string.encode()).hexdigest()
+
+# Helper function to check if we have cached results for current URLs
+def check_cached_enrichment(current_urls_hash):
+    """Check if we have cached enrichment results for the current URLs"""
+    if not current_urls_hash:
+        return None, False
+    
+    # Check if we have the same URLs hash as before
+    if (st.session_state.last_enriched_urls_hash == current_urls_hash and 
+        st.session_state.last_result_json_url):
+        print(f"✓ Found cached enrichment for current URLs (hash: {current_urls_hash[:8]}...)")
+        return st.session_state.last_result_json_url, True
+    
+    return None, False
 
 # AI-Powered Search Function
 def ai_search_candidates(query, candidates):
@@ -108,9 +144,9 @@ MATCHES: [comma-separated candidate numbers]
 EXPLANATION: [your explanation in Spanish]
 """
         
-        # Call OpenAI API
+        # Call OpenAI API with GPT-4o
         response = openai_client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4o",
             messages=[
                 {"role": "system", "content": "You are a helpful HR recruitment assistant. Always respond in Spanish for explanations."},
                 {"role": "user", "content": prompt}
@@ -504,6 +540,19 @@ def write_to_sheet(data):
         print(f"Updated rows: {result.get('updatedRows')}")
         print(f"Updated cells: {result.get('updatedCells')}")
         
+        # Calculate and store the hash of the LinkedIn URLs we just wrote
+        linkedin_urls = []
+        for row in data:
+            if 'Profile Url' in row and row['Profile Url']:
+                linkedin_urls.append(row['Profile Url'])
+            elif 'profileUrl' in row and row['profileUrl']:
+                linkedin_urls.append(row['profileUrl'])
+        
+        if linkedin_urls:
+            urls_hash = create_urls_hash(linkedin_urls)
+            st.session_state.last_enriched_urls_hash = None  # Reset - new data hasn't been enriched yet
+            print(f"Stored URL hash for future caching: {urls_hash[:8]}...")
+        
         st.session_state.last_update = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         st.success(f"Successfully wrote {len(values)-1} contacts to spreadsheet!")
         return True
@@ -587,16 +636,50 @@ def launch_enricher_job(urls=None, query=None, limit=5):
         # Ensure the sheet is properly formatted
         sheet_data = get_sheet_data()
         
-        # Check if we have valid LinkedIn URLs in the sheet
-        valid_urls = 0
+        # Check if we have valid LinkedIn URLs in the sheet and extract them
+        linkedin_urls_in_sheet = []
         if sheet_data:
             for row in sheet_data:
                 if 'Profile Url' in row and row['Profile Url'] and 'linkedin.com/in/' in row['Profile Url'].lower():
-                    valid_urls += 1
+                    linkedin_urls_in_sheet.append(row['Profile Url'])
         
-        if valid_urls == 0:
+        if len(linkedin_urls_in_sheet) == 0:
             st.error("❌ No valid LinkedIn URLs found in the spreadsheet. Please add valid LinkedIn URLs first.")
             return None
+        
+        # Calculate hash of current URLs
+        current_urls_hash = create_urls_hash(linkedin_urls_in_sheet)
+        
+        # Check if we have cached results for these URLs
+        cached_json_url, is_cached = check_cached_enrichment(current_urls_hash)
+        
+        if is_cached and cached_json_url:
+            st.info("📦 Found cached enrichment data for these contacts! Fetching from cache instead of running PhantomBuster again...")
+            print(f"✓ Using cached result JSON URL: {cached_json_url}")
+            
+            try:
+                # Fetch cached data
+                json_response = requests.get(cached_json_url)
+                
+                if json_response.status_code == 200:
+                    enriched_data = json_response.json()
+                    if isinstance(enriched_data, list) and len(enriched_data) > 0:
+                        print(f"✓ Successfully loaded {len(enriched_data)} profiles from cache")
+                        st.session_state.enricher_results = enriched_data
+                        st.session_state.candidates = enriched_data
+                        st.session_state.enricher_status = "completed"
+                        st.success(f"✅ Loaded {len(enriched_data)} enriched profiles from cache!")
+                        st.info("💡 Tip: Upload a different set of LinkedIn URLs to trigger a new enrichment.")
+                        return "cached"  # Return special value to indicate cache hit
+                    else:
+                        print("Cached data is empty or invalid, will run fresh enrichment")
+                else:
+                    print(f"Failed to fetch cached data: {json_response.status_code}, will run fresh enrichment")
+            except Exception as e:
+                print(f"Error fetching cached data: {e}, will run fresh enrichment")
+        
+        # If we reach here, we need to run a fresh enrichment
+        print(f"Running fresh enrichment for {len(linkedin_urls_in_sheet)} LinkedIn profiles...")
         
         # According to PhantomBuster documentation, this is the correct endpoint
         url = "https://api.phantombuster.com/api/v2/agents/launch"
@@ -925,6 +1008,9 @@ def get_enricher_results():
                         print(f"Found result JSON URL: {json_url}")
                         print(f"Fetching enriched data from S3...")
                         
+                        # Store the result JSON URL for caching
+                        st.session_state.last_result_json_url = json_url
+                        
                         # Fetch the JSON data directly from S3
                         json_response = requests.get(json_url)
                         
@@ -934,6 +1020,15 @@ def get_enricher_results():
                                 if isinstance(enriched_data, list) and len(enriched_data) > 0:
                                     print(f"✓ Successfully retrieved {len(enriched_data)} enriched profiles from result.json")
                                     st.session_state.enricher_results = enriched_data
+                                    
+                                    # Store the hash of URLs that were just enriched for future caching
+                                    sheet_data = get_sheet_data()
+                                    if sheet_data:
+                                        enriched_urls = [row.get('Profile Url') for row in sheet_data if row.get('Profile Url')]
+                                        if enriched_urls:
+                                            st.session_state.last_enriched_urls_hash = create_urls_hash(enriched_urls)
+                                            print(f"✓ Stored hash for {len(enriched_urls)} enriched URLs for future caching")
+                                    
                                     return enriched_data
                                 else:
                                     print(f"Result JSON is empty or not a list: {type(enriched_data)}")
@@ -1444,7 +1539,10 @@ with tab1:
                     else:
                         # Launch enrichment job
                         job_id = launch_enricher_job(urls=True)
-                        if job_id:
+                        if job_id == "cached":
+                            # Data was loaded from cache, no progress bar needed
+                            pass
+                        elif job_id:
                             st.success(f"✅ Data enrichment job launched! ID: {job_id}")
                             st.info("The job is now running. You'll see updates on the progress below.")
                             
