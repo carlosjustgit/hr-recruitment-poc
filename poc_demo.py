@@ -33,19 +33,32 @@ from googleapiclient.errors import HttpError
 # Setup Google credentials (works both locally and on Streamlit Cloud)
 def get_google_credentials():
     """Get Google credentials from Streamlit secrets or local file"""
-    if "gcp_service_account" in st.secrets:
-        # Running on Streamlit Cloud - use secrets
-        credentials_dict = dict(st.secrets["gcp_service_account"])
-        return service_account.Credentials.from_service_account_info(
-            credentials_dict,
-            scopes=['https://www.googleapis.com/auth/spreadsheets']
-        )
-    else:
-        # Running locally - use file
-        return Credentials.from_service_account_file(
-            "service-account-key.json",
-            scopes=['https://www.googleapis.com/auth/spreadsheets']
-        )
+    try:
+        if "gcp_service_account" in st.secrets:
+            # Running on Streamlit Cloud - use secrets
+            print("✓ Loading Google credentials from Streamlit secrets")
+            credentials_dict = dict(st.secrets["gcp_service_account"])
+            return service_account.Credentials.from_service_account_info(
+                credentials_dict,
+                scopes=['https://www.googleapis.com/auth/spreadsheets']
+            )
+    except Exception as e:
+        print(f"⚠️ Error accessing Streamlit secrets: {e}")
+    
+    # Fall back to local file
+    try:
+        import os
+        if os.path.exists("service-account-key.json"):
+            print("✓ Loading Google credentials from local file")
+            return Credentials.from_service_account_file(
+                "service-account-key.json",
+                scopes=['https://www.googleapis.com/auth/spreadsheets']
+            )
+        else:
+            raise FileNotFoundError("Google credentials not found in secrets or local file")
+    except Exception as e:
+        print(f"❌ Failed to load Google credentials: {e}")
+        raise
 
 # Set page config
 st.set_page_config(page_title="HR Recruitment PoC", page_icon="🔍", layout="wide")
