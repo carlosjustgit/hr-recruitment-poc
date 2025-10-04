@@ -1672,6 +1672,12 @@ with tab2:
         
         return suggestions[:6]
     
+    # Check if a preset button was clicked in previous run
+    preset_query = None
+    if 'preset_clicked' in st.session_state:
+        preset_query = st.session_state.preset_clicked
+        del st.session_state.preset_clicked
+    
     # Suggestions section at the top
     suggestions = generate_dynamic_suggestions(current_candidates)
     
@@ -1681,20 +1687,16 @@ with tab2:
         col_idx = idx % 3
         with cols[col_idx]:
             if st.button(suggestion, key=f"suggestion_{idx}", use_container_width=True):
-                st.session_state.selected_suggestion = suggestion
+                st.session_state.preset_clicked = suggestion
                 st.rerun()
     
     st.divider()
     
     # Main chat input at the top (more prominent)
-    # Use selected suggestion if available
-    default_value = st.session_state.pop('selected_suggestion', '')
-    
     query = st.text_area(
         "Ask anything about your candidates:",
         placeholder="Example: Quien tiene experiencia en desarrollo web y habla inglés?",
         height=100,
-        value=default_value,
         key="chat_input"
     )
     
@@ -1709,11 +1711,11 @@ with tab2:
     
     st.divider()
     
-    # Process query
-    if send_button and query:
+    # Process query - either from button click or from preset
+    if (send_button and query) or preset_query:
         with st.spinner("Searching..."):
-            # Display the search query
-            search_term = query or "your search"
+            # Use preset query if available, otherwise use text input
+            search_term = preset_query if preset_query else query
             
             # Use real data if available, otherwise use demo data
             if st.session_state.data_loaded and st.session_state.candidates:
