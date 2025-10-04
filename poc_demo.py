@@ -1165,28 +1165,33 @@ with tab1:
                     st.success(f"Loaded {len(st.session_state.candidates)} candidates from sheet")
         
         with col3b:
-            if st.button("Add Sample LinkedIn URLs"):
+            if st.button("Add Sample LinkedIn URLs", type="primary"):
                 with st.spinner("Adding sample LinkedIn profiles..."):
                     sample_data = [
                         {
-                            "profileUrl": "https://www.linkedin.com/in/alisson-frota/",
-                            "fullName": "Alisson Frota"
+                            "Profile Url": "https://www.linkedin.com/in/alisson-frota/",
+                            "First Name": "Alisson",
+                            "Last Name": "Frota"
                         },
                         {
-                            "profileUrl": "https://www.linkedin.com/in/herbert-zapata-salvo/",
-                            "fullName": "Herbert Zapata Salvo"
+                            "Profile Url": "https://www.linkedin.com/in/herbert-zapata-salvo/",
+                            "First Name": "Herbert",
+                            "Last Name": "Zapata Salvo"
                         },
                         {
-                            "profileUrl": "https://www.linkedin.com/in/rkniazev/",
-                            "fullName": "Roman K."
+                            "Profile Url": "https://www.linkedin.com/in/rkniazev/",
+                            "First Name": "Roman",
+                            "Last Name": "K."
                         },
                         {
-                            "profileUrl": "https://www.linkedin.com/in/enbonnet/",
-                            "fullName": "Ender Bonnet"
+                            "Profile Url": "https://www.linkedin.com/in/enbonnet/",
+                            "First Name": "Ender",
+                            "Last Name": "Bonnet"
                         },
                         {
-                            "profileUrl": "https://www.linkedin.com/in/pierinazaramella/",
-                            "fullName": "Pierina Zaramella"
+                            "Profile Url": "https://www.linkedin.com/in/pierinazaramella/",
+                            "First Name": "Pierina",
+                            "Last Name": "Zaramella"
                         }
                     ]
                     success = write_to_sheet(sample_data)
