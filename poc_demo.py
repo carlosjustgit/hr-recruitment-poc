@@ -1842,9 +1842,23 @@ with tab2:
     else:
         st.success(f"✅ OpenAI GPT-4o is active and ready for intelligent candidate search!")
     
-    # Initialize chat history
+    # Initialize chat history and AI error tracking
     if 'chat_history' not in st.session_state:
         st.session_state.chat_history = []
+    if 'last_ai_error' not in st.session_state:
+        st.session_state.last_ai_error = None
+    
+    # Display persistent AI error if one occurred
+    if st.session_state.last_ai_error:
+        st.error(f"🚨 Last AI Search Error: {st.session_state.last_ai_error}")
+        with st.expander("📋 View Full Error Details", expanded=False):
+            st.code(st.session_state.last_ai_error)
+        col1, col2 = st.columns([1, 5])
+        with col1:
+            if st.button("✅ Clear Error"):
+                st.session_state.last_ai_error = None
+                st.rerun()
+        st.divider()
     
     # Get current candidates data - ensure it's always a list
     current_candidates = st.session_state.candidates if st.session_state.data_loaded and st.session_state.candidates else []
@@ -2051,9 +2065,8 @@ with tab2:
                     for i, candidate in enumerate(filtered_candidates):
                         candidate['match_score'] = len(filtered_candidates) - i + 10
                 elif ai_explanation and "Error:" in ai_explanation:
-                    # Display the error to the user
-                    st.error(f"AI Search Failed: {ai_explanation}")
-                    st.warning("Falling back to keyword search...")
+                    # Store error in session state for persistent display
+                    st.session_state.last_ai_error = ai_explanation
             
             # Fall back to keyword search if AI didn't work or isn't available
             if not filtered_candidates:
