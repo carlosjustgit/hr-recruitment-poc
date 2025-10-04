@@ -225,8 +225,11 @@ EXPLANATION: [your explanation in Spanish]
         return matched_candidates, explanation
         
     except Exception as e:
-        print(f"AI search error: {e}")
-        return None, None
+        print(f"❌ AI search error: {e}")
+        import traceback
+        traceback.print_exc()
+        # Return error details for debugging
+        return None, f"Error: {str(e)}"
 
 # Functions to interact with Google Sheets
 def get_sheet_data():
@@ -2047,6 +2050,10 @@ with tab2:
                     # Add match scores for consistency
                     for i, candidate in enumerate(filtered_candidates):
                         candidate['match_score'] = len(filtered_candidates) - i + 10
+                elif ai_explanation and "Error:" in ai_explanation:
+                    # Display the error to the user
+                    st.error(f"AI Search Failed: {ai_explanation}")
+                    st.warning("Falling back to keyword search...")
             
             # Fall back to keyword search if AI didn't work or isn't available
             if not filtered_candidates:
