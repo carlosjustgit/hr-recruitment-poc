@@ -1857,8 +1857,21 @@ with tab3:
     
     # Show data
     if 'candidates' in st.session_state and st.session_state.candidates:
-        # Create dataframe
-        df = pd.DataFrame(st.session_state.candidates)
+        # Normalize data structure to avoid DataFrame creation errors
+        all_keys = set()
+        for item in st.session_state.candidates:
+            if isinstance(item, dict):
+                all_keys.update(item.keys())
+        
+        normalized_data = []
+        for item in st.session_state.candidates:
+            if isinstance(item, dict):
+                normalized_item = {key: None for key in all_keys}
+                normalized_item.update(item)
+                normalized_data.append(normalized_item)
+        
+        # Create dataframe from normalized data
+        df = pd.DataFrame(normalized_data) if normalized_data else pd.DataFrame()
         
         # Show data count
         st.success(f"Showing {len(df)} enriched profiles")
