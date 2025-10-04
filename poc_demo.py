@@ -16,6 +16,7 @@ from datetime import datetime
 import traceback
 import io
 import re
+import streamlit.components.v1 as components
 
 # Import service modules
 from google.oauth2.service_account import Credentials
@@ -1880,12 +1881,44 @@ with tab2:
                     'candidates': filtered_candidates[:5]
                 })
             
+            # Set flag to trigger scroll on next render
+            st.session_state.should_scroll = True
+            
             # Force rerun to display the new message
             st.rerun()
     
     # Display chat history BELOW the input
     st.markdown("---")
+    st.markdown('<div id="chat-history-section"></div>', unsafe_allow_html=True)
     st.markdown("### 💬 Chat History")
+    
+    # Auto-scroll to chat history after search
+    if len(st.session_state.chat_history) > 0 and st.session_state.get('should_scroll', False):
+        components.html(
+            """
+            <script>
+                // Wait for the page to load
+                window.parent.document.addEventListener('DOMContentLoaded', function() {
+                    setTimeout(function() {
+                        const chatSection = window.parent.document.getElementById('chat-history-section');
+                        if (chatSection) {
+                            chatSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        }
+                    }, 100);
+                });
+                
+                // Also try immediately in case DOM is already loaded
+                setTimeout(function() {
+                    const chatSection = window.parent.document.getElementById('chat-history-section');
+                    if (chatSection) {
+                        chatSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
+                }, 100);
+            </script>
+            """,
+            height=0,
+        )
+        st.session_state.should_scroll = False
     
     if len(st.session_state.chat_history) == 0:
         st.info("No messages yet. Ask a question above to get started!")
