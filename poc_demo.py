@@ -42,7 +42,8 @@ def get_google_credentials():
         if hasattr(st, 'secrets') and st.secrets:
             try:
                 # Debug: print what keys are available in secrets
-                print(f"DEBUG: Available secrets keys: {list(st.secrets.keys())}")
+                available_keys = list(st.secrets.keys())
+                print(f"DEBUG: Available secrets keys: {available_keys}")
                 
                 # Try to access the gcp_service_account section
                 if "gcp_service_account" in st.secrets:
@@ -56,7 +57,11 @@ def get_google_credentials():
                         scopes=['https://www.googleapis.com/auth/spreadsheets']
                     )
                 else:
-                    print("⚠️ gcp_service_account NOT found in secrets")
+                    error_msg = f"⚠️ gcp_service_account NOT found in secrets. Available: {available_keys}"
+                    print(error_msg)
+                    # Also show in UI for debugging
+                    import streamlit as st_debug
+                    st_debug.error(error_msg)
             except Exception as e:
                 print(f"⚠️ Error accessing gcp_service_account from secrets: {e}")
                 traceback.print_exc()
