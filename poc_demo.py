@@ -76,6 +76,18 @@ st.markdown("Upload contacts, enrich data, and search candidates using natural l
 # Warning banner
 st.warning("⚠️ **PROOF OF CONCEPT**: This is a demo to showcase the functionality. In production, data sources will be official and consented.")
 
+# Helper function to ensure data is always a list
+def ensure_list(data):
+    """Ensure data is always a list, never a dict or other type"""
+    if data is None:
+        return []
+    elif isinstance(data, list):
+        return data
+    elif isinstance(data, dict):
+        return [data]
+    else:
+        return []
+
 # Helper function to create hash of URLs
 def create_urls_hash(urls_list):
     """Create a hash of LinkedIn URLs to detect if we're processing the same data"""
@@ -666,7 +678,7 @@ def launch_enricher_job(urls=None, query=None, limit=5):
                     if isinstance(enriched_data, list) and len(enriched_data) > 0:
                         print(f"✓ Successfully loaded {len(enriched_data)} profiles from cache")
                         st.session_state.enricher_results = enriched_data
-                        st.session_state.candidates = enriched_data
+                        st.session_state.candidates = ensure_list(enriched_data)
                         st.session_state.enricher_status = "completed"
                         st.success(f"✅ Loaded {len(enriched_data)} enriched profiles from cache!")
                         st.info("💡 Tip: Upload a different set of LinkedIn URLs to trigger a new enrichment.")
@@ -1514,7 +1526,7 @@ with tab1:
                         if success:
                             st.success("✅ Previous data cleared and new contacts added to spreadsheet!")
                             # Refresh data
-                            st.session_state.candidates = get_sheet_data()
+                            st.session_state.candidates = ensure_list(get_sheet_data())
                             # Reset confirmation state
                             st.session_state.confirm_clear = False
                         else:
@@ -1589,7 +1601,7 @@ with tab1:
                     
                     # Apply demo enrichment
                     enriched_data = get_demo_enriched_data(existing_data)
-                    st.session_state.candidates = enriched_data
+                    st.session_state.candidates = ensure_list(enriched_data)
                     st.session_state.data_loaded = True
                     
                     # Show success message
@@ -1608,7 +1620,7 @@ with tab1:
         with col3a:
             if st.button("Load Current Data"):
                 with st.spinner("Loading data from Google Sheet..."):
-                    st.session_state.candidates = get_sheet_data()
+                    st.session_state.candidates = ensure_list(get_sheet_data())
                     st.success(f"Loaded {len(st.session_state.candidates)} candidates from sheet")
         
         with col3b:
@@ -1644,7 +1656,7 @@ with tab1:
                     success = write_to_sheet(sample_data)
                     if success:
                         st.success("✅ Sample LinkedIn profiles added to spreadsheet!")
-                        st.session_state.candidates = get_sheet_data()
+                        st.session_state.candidates = ensure_list(get_sheet_data())
                     else:
                         st.error("❌ Failed to add sample profiles")
     
@@ -1697,12 +1709,12 @@ with tab1:
                 # CRITICAL FIX: Get data from PhantomBuster results, NOT from Google Sheet
                 # The enriched data is already stored in enricher_results by get_enricher_results()
                 if 'enricher_results' in st.session_state and st.session_state.enricher_results:
-                    updated_data = st.session_state.enricher_results
+                    updated_data = ensure_list(st.session_state.enricher_results)
                     st.session_state.candidates = updated_data  # Store it in candidates for display
                     print(f"Using PhantomBuster enriched data with {len(updated_data)} profiles")
                 else:
                     # Fallback to Google Sheet only if PhantomBuster data is not available
-                    updated_data = get_sheet_data()
+                    updated_data = ensure_list(get_sheet_data())
                     print(f"Falling back to Google Sheet data")
                 
                 # Check if data is actually enriched
@@ -1746,7 +1758,7 @@ with tab1:
                         if st.button("Try refreshing data from Google Sheet"):
                             with st.spinner("Reloading data from Google Sheet..."):
                                 time.sleep(2)  # Brief pause for UX
-                                updated_data = get_sheet_data()
+                                updated_data = ensure_list(get_sheet_data())
                                 is_enriched = check_if_data_enriched(updated_data)
                                 if is_enriched:
                                     st.success("✅ Successfully loaded enriched data!")
@@ -1812,8 +1824,12 @@ with tab2:
     if 'chat_history' not in st.session_state:
         st.session_state.chat_history = []
     
-    # Get current candidates data
+    # Get current candidates data - ensure it's always a list
     current_candidates = st.session_state.candidates if st.session_state.data_loaded and st.session_state.candidates else []
+    if isinstance(current_candidates, dict):
+        current_candidates = [current_candidates]
+    elif not isinstance(current_candidates, list):
+        current_candidates = []
     
     # Generate dynamic suggestions based on actual data
     def generate_dynamic_suggestions(candidates):
@@ -1923,6 +1939,11 @@ with tab2:
             # Use real data if available, otherwise use demo data
             if st.session_state.data_loaded and st.session_state.candidates:
                 candidates = st.session_state.candidates
+                # Ensure it's a list
+                if isinstance(candidates, dict):
+                    candidates = [candidates]
+                elif not isinstance(candidates, list):
+                    candidates = []
             else:
                 # Load data if not already loaded
                 candidates = get_sheet_data()
@@ -2180,13 +2201,13 @@ with tab3:
         with st.spinner("Loading data from Google Sheet..."):
             # First try to get data from enricher results if available
             if 'enricher_results' in st.session_state and st.session_state.enricher_results:
-                st.session_state.candidates = st.session_state.enricher_results
+                st.session_state.candidates = ensure_list(st.session_state.enricher_results)
                 st.success("✅ Loaded enriched data from PhantomBuster results")
             else:
                 # Fall back to Google Sheet data
                 sheet_data = get_sheet_data()
                 if sheet_data:
-                    st.session_state.candidates = sheet_data
+                    st.session_state.candidates = ensure_list(sheet_data)
                     st.success(f"✅ Loaded {len(sheet_data)} records from Google Sheet")
                 else:
                     st.error("❌ Failed to load data from Google Sheet")
