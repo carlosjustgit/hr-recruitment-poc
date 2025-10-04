@@ -57,22 +57,33 @@ DATA_ENRICHER_AGENT_ID = "686901552340687"  # Updated agent ID
 
 # OpenAI Configuration (optional - if not set, falls back to keyword search)
 # Try to get from Streamlit secrets first, then fall back to environment variable
+OPENAI_API_KEY = ""
 try:
-    OPENAI_API_KEY = st.secrets.get("OPENAI_API_KEY", os.getenv("OPENAI_API_KEY", ""))
-except:
+    if "OPENAI_API_KEY" in st.secrets:
+        OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
+        print(f"✓ Loaded OpenAI key from st.secrets (starts with: {OPENAI_API_KEY[:10]}...)")
+    else:
+        print("⚠️ OPENAI_API_KEY not found in st.secrets, trying environment variable...")
+        OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+        if OPENAI_API_KEY:
+            print(f"✓ Loaded OpenAI key from environment (starts with: {OPENAI_API_KEY[:10]}...)")
+except Exception as e:
+    print(f"⚠️ Error accessing st.secrets: {e}")
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 
 USE_AI_SEARCH = bool(OPENAI_API_KEY)
+print(f"DEBUG: USE_AI_SEARCH = {USE_AI_SEARCH}, API_KEY length = {len(OPENAI_API_KEY)}")
 
 # Initialize OpenAI client if API key is available
 openai_client = None
 if USE_AI_SEARCH:
     try:
         openai_client = OpenAI(api_key=OPENAI_API_KEY)
-        print(f"✓ OpenAI initialized - AI-powered search enabled (key starts with: {OPENAI_API_KEY[:10]}...)")
+        print(f"✓ OpenAI client initialized successfully - GPT-4o ready!")
     except Exception as e:
-        print(f"Failed to initialize Open AI: {e}")
+        print(f"❌ Failed to initialize OpenAI client: {e}")
         USE_AI_SEARCH = False
+        openai_client = None
 else:
     print("⚠️ OpenAI API key not found - AI search will be disabled")
 
@@ -1821,10 +1832,12 @@ with tab2:
     st.header("💬 Ask AI About Your Candidates")
     st.write("Chat with AI to find the perfect candidates from your enriched data")
     
-    # Show warning if OpenAI is not available
+    # Show OpenAI status
     if not USE_AI_SEARCH:
         st.error("⚠️ OpenAI API key not configured! AI search is disabled. Please add OPENAI_API_KEY to your secrets.")
         st.info("Without OpenAI, only basic keyword matching is available.")
+    else:
+        st.success(f"✅ OpenAI GPT-4o is active and ready for intelligent candidate search!")
     
     # Initialize chat history
     if 'chat_history' not in st.session_state:
@@ -2026,8 +2039,8 @@ with tab2:
             
             # Try AI-powered search first if available
             if USE_AI_SEARCH and openai_client:
-                st.info("🤖 Using AI to analyze candidates...")
-                ai_candidates, ai_explanation = ai_search_candidates(search_term, candidates)
+                with st.spinner("🤖 AI is analyzing candidates..."):
+                    ai_candidates, ai_explanation = ai_search_candidates(search_term, candidates)
                 
                 if ai_candidates:
                     filtered_candidates = ai_candidates
