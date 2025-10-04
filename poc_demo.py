@@ -1769,15 +1769,27 @@ with tab1:
                     
                     # Show a preview of the enriched data
                     with st.expander("Preview of enriched data"):
-                        df = pd.DataFrame(updated_data[:5])
-                        # Highlight empty cells to make it obvious what's missing
-                        def highlight_missing(val):
-                            if val == '' or val is None:
-                                return 'background-color: #ffcccc'
-                            return ''
+                        # Ensure updated_data is a list
+                        if isinstance(updated_data, list):
+                            preview_data = updated_data[:5]
+                        elif isinstance(updated_data, dict):
+                            # If it's a dict, wrap it in a list
+                            preview_data = [updated_data]
+                        else:
+                            preview_data = []
                         
-                        styled_df = df.style.applymap(highlight_missing)
-                        st.dataframe(styled_df)
+                        if preview_data:
+                            df = pd.DataFrame(preview_data)
+                            # Highlight empty cells to make it obvious what's missing
+                            def highlight_missing(val):
+                                if val == '' or val is None:
+                                    return 'background-color: #ffcccc'
+                                return ''
+                            
+                            styled_df = df.style.map(highlight_missing)
+                            st.dataframe(styled_df)
+                        else:
+                            st.info("No data to preview")
                 
                 break
                 
