@@ -17,6 +17,7 @@ import traceback
 import io
 import re
 import streamlit.components.v1 as components
+from openai import OpenAI
 
 # Import service modules
 from google.oauth2.service_account import Credentials
@@ -30,6 +31,20 @@ st.set_page_config(page_title="HR Recruitment PoC", page_icon="🔍", layout="wi
 SHEET_ID = "12Wp7WSecBTDn1bwb-phv5QN6JEC8vpztgs_tK5_fMdQ"
 DATA_ENRICHER_API_KEY = "1SROua2I62PpnUfCj52i0w3Dc3X50lRNZV1BFDA62LY"
 DATA_ENRICHER_AGENT_ID = "686901552340687"  # Updated agent ID
+
+# OpenAI Configuration (optional - if not set, falls back to keyword search)
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")  # Set this in your environment or .streamlit/secrets.toml
+USE_AI_SEARCH = bool(OPENAI_API_KEY)
+
+# Initialize OpenAI client if API key is available
+openai_client = None
+if USE_AI_SEARCH:
+    try:
+        openai_client = OpenAI(api_key=OPENAI_API_KEY)
+        print("✓ OpenAI initialized - AI-powered search enabled")
+    except Exception as e:
+        print(f"Failed to initialize Open AI: {e}")
+        USE_AI_SEARCH = False
 
 # Initialize session state
 if 'data_loaded' not in st.session_state:
@@ -51,6 +66,83 @@ st.markdown("Upload contacts, enrich data, and search candidates using natural l
 
 # Warning banner
 st.warning("⚠️ **PROOF OF CONCEPT**: This is a demo to showcase the functionality. In production, data sources will be official and consented.")
+
+# AI-Powered Search Function
+def ai_search_candidates(query, candidates):
+    """Use OpenAI to intelligently search and analyze candidates"""
+    if not USE_AI_SEARCH or not openai_client or not candidates:
+        return None, None
+    
+    try:
+        # Prepare candidate summaries for AI
+        candidate_summaries = []
+        for i, candidate in enumerate(candidates[:20]):  # Limit to 20 for token efficiency
+            summary = f"Candidate {i+1}:\n"
+            summary += f"  Name: {candidate.get('firstName', '')} {candidate.get('lastName', '')}\n"
+            summary += f"  Headline: {candidate.get('linkedinHeadline', candidate.get('headline', 'N/A'))}\n"
+            summary += f"  Company: {candidate.get('companyName', candidate.get('Company Name', 'N/A'))}\n"
+            summary += f"  Skills: {candidate.get('linkedinSkillsLabel', candidate.get('Linkedin Skills Label', 'N/A'))}\n"
+            summary += f"  Description: {candidate.get('linkedinDescription', candidate.get('Linkedin Description', 'N/A'))[:200]}...\n"
+            summary += f"  Education: {candidate.get('linkedinSchoolDegree', candidate.get('Linkedin School Degree', 'N/A'))}\n"
+            summary += "\n"
+            candidate_summaries.append((i, summary))
+        
+        # Create the prompt for OpenAI
+        candidates_text = "\n".join([s[1] for s in candidate_summaries])
+        
+        prompt = f"""You are an HR recruitment assistant. Analyze these candidates and answer the user's question.
+
+User Question: "{query}"
+
+Candidates:
+{candidates_text}
+
+Please:
+1. Identify which candidates best match the question
+2. Explain WHY they match (be specific about skills, experience, education)
+3. Return ONLY the candidate numbers that match (e.g., "1, 3, 5")
+4. Provide a brief, professional explanation in Spanish
+
+Format your response as:
+MATCHES: [comma-separated candidate numbers]
+EXPLANATION: [your explanation in Spanish]
+"""
+        
+        # Call OpenAI API
+        response = openai_client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "You are a helpful HR recruitment assistant. Always respond in Spanish for explanations."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7,
+            max_tokens=500
+        )
+        
+        ai_response = response.choices[0].message.content
+        
+        # Parse the response
+        matches = []
+        explanation = ai_response
+        
+        if "MATCHES:" in ai_response and "EXPLANATION:" in ai_response:
+            parts = ai_response.split("EXPLANATION:")
+            matches_part = parts[0].replace("MATCHES:", "").strip()
+            explanation = parts[1].strip()
+            
+            # Extract candidate numbers
+            import re
+            numbers = re.findall(r'\d+', matches_part)
+            matches = [int(n) - 1 for n in numbers if 0 < int(n) <= len(candidates)]  # Convert to 0-indexed
+        
+        # Get the matching candidates
+        matched_candidates = [candidates[i] for i in matches if i < len(candidates)]
+        
+        return matched_candidates, explanation
+        
+    except Exception as e:
+        print(f"AI search error: {e}")
+        return None, None
 
 # Functions to interact with Google Sheets
 def get_sheet_data():
@@ -1793,62 +1885,80 @@ with tab2:
             
             # Filter results based on search query
             filtered_candidates = []
-            search_term_lower = search_term.lower()
+            ai_explanation = None
             
-            # Define field mappings for both old and new formats
-            field_mappings = {
-                'education': ['education', 'Linkedin School Degree', 'Linkedin School Name'],
-                'headline': ['headline', 'Linkedin Headline'],
-                'skills': ['skills_tags', 'Linkedin Skills Label'],
-                'company': ['current_company', 'company', 'Company Name', 'Linkedin Company Name'],
-                'location': ['Location', 'Linkedin Job Location'],
-                'description': ['summary', 'Linkedin Description', 'Linkedin Job Description'],
-                'job_title': ['jobTitle', 'Linkedin Job Title']
-            }
-            
-            # Simple filtering logic based on the search term
-            for candidate in candidates:
-                score = 0
+            # Try AI-powered search first if available
+            if USE_AI_SEARCH and openai_client:
+                st.info("🤖 Using AI to analyze candidates...")
+                ai_candidates, ai_explanation = ai_search_candidates(search_term, candidates)
                 
-                # Check all mapped fields for matches
-                for field_category, field_names in field_mappings.items():
-                    for field in field_names:
-                        if field in candidate and candidate[field]:
-                            field_value = str(candidate[field]).lower()
-                            
-                            # Direct match with search term
-                            if search_term_lower in field_value:
-                                score += 2
-                            
-                            # Check for specific terms
-                            if "magíster" in search_term_lower and "magíster" in field_value:
-                                score += 3
-                            if "finanzas" in search_term_lower and "finanzas" in field_value:
-                                score += 2
-                            if "marketing" in search_term_lower and "marketing" in field_value:
-                                score += 2
-                            if "digital" in search_term_lower and "digital" in field_value:
-                                score += 1
-                            if "minería" in search_term_lower and "minería" in field_value:
-                                score += 2
-                            if "análisis" in search_term_lower and "análisis" in field_value:
-                                score += 2
-                            if "riesgo" in search_term_lower and "riesgo" in field_value:
-                                score += 1
-                            if "python" in search_term_lower and "python" in field_value:
-                                score += 2
-                            if "data science" in search_term_lower and "data" in field_value:
-                                score += 2
-                            if "startups" in search_term_lower and "startup" in field_value:
-                                score += 2
-                            if "php" in search_term_lower and "php" in field_value:
-                                score += 2
-                            if "drupal" in search_term_lower and "drupal" in field_value:
-                                score += 2
+                if ai_candidates:
+                    filtered_candidates = ai_candidates
+                    # Add match scores for consistency
+                    for i, candidate in enumerate(filtered_candidates):
+                        candidate['match_score'] = len(filtered_candidates) - i + 10
+            
+            # Fall back to keyword search if AI didn't work or isn't available
+            if not filtered_candidates:
+                if USE_AI_SEARCH:
+                    st.info("Falling back to keyword search...")
+                
+                search_term_lower = search_term.lower()
+                
+                # Define field mappings for both old and new formats
+                field_mappings = {
+                    'education': ['education', 'Linkedin School Degree', 'Linkedin School Name'],
+                    'headline': ['headline', 'Linkedin Headline'],
+                    'skills': ['skills_tags', 'Linkedin Skills Label'],
+                    'company': ['current_company', 'company', 'Company Name', 'Linkedin Company Name'],
+                    'location': ['Location', 'Linkedin Job Location'],
+                    'description': ['summary', 'Linkedin Description', 'Linkedin Job Description'],
+                    'job_title': ['jobTitle', 'Linkedin Job Title']
+                }
+                
+                # Simple filtering logic based on the search term
+                for candidate in candidates:
+                    score = 0
                     
-                if score > 0:
-                    candidate['match_score'] = score
-                    filtered_candidates.append(candidate)
+                    # Check all mapped fields for matches
+                    for field_category, field_names in field_mappings.items():
+                        for field in field_names:
+                            if field in candidate and candidate[field]:
+                                field_value = str(candidate[field]).lower()
+                                
+                                # Direct match with search term
+                                if search_term_lower in field_value:
+                                    score += 2
+                                
+                                # Check for specific terms
+                                if "magíster" in search_term_lower and "magíster" in field_value:
+                                    score += 3
+                                if "finanzas" in search_term_lower and "finanzas" in field_value:
+                                    score += 2
+                                if "marketing" in search_term_lower and "marketing" in field_value:
+                                    score += 2
+                                if "digital" in search_term_lower and "digital" in field_value:
+                                    score += 1
+                                if "minería" in search_term_lower and "minería" in field_value:
+                                    score += 2
+                                if "análisis" in search_term_lower and "análisis" in field_value:
+                                    score += 2
+                                if "riesgo" in search_term_lower and "riesgo" in field_value:
+                                    score += 1
+                                if "python" in search_term_lower and "python" in field_value:
+                                    score += 2
+                                if "data science" in search_term_lower and "data" in field_value:
+                                    score += 2
+                                if "startups" in search_term_lower and "startup" in field_value:
+                                    score += 2
+                                if "php" in search_term_lower and "php" in field_value:
+                                    score += 2
+                                if "drupal" in search_term_lower and "drupal" in field_value:
+                                    score += 2
+                    
+                    if score > 0:
+                        candidate['match_score'] = score
+                        filtered_candidates.append(candidate)
             
             # Sort by match score
             filtered_candidates.sort(key=lambda x: x.get('match_score', 0), reverse=True)
@@ -1867,17 +1977,22 @@ with tab2:
             
             # Generate AI response
             if len(filtered_candidates) == 0:
-                ai_response = f"No encontré candidatos que coincidan con '{search_term}'. Intenta con otros criterios de búsqueda."
+                response_text = f"No encontré candidatos que coincidan con '{search_term}'. Intenta con otros criterios de búsqueda."
                 st.session_state.chat_history.append({
                     'role': 'assistant',
-                    'content': ai_response,
+                    'content': response_text,
                     'candidates': []
                 })
             else:
-                ai_response = f"Encontré {len(filtered_candidates)} candidatos que coinciden con tu búsqueda. Aquí están los más relevantes:"
+                # Use AI explanation if available, otherwise use generic message
+                if ai_explanation:
+                    response_text = f"🤖 **Análisis AI:**\n\n{ai_explanation}\n\nEncontré {len(filtered_candidates)} candidatos relevantes:"
+                else:
+                    response_text = f"Encontré {len(filtered_candidates)} candidatos que coinciden con tu búsqueda. Aquí están los más relevantes:"
+                
                 st.session_state.chat_history.append({
                     'role': 'assistant',
-                    'content': ai_response,
+                    'content': response_text,
                     'candidates': filtered_candidates[:5]
                 })
             
