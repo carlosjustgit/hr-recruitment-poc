@@ -1894,18 +1894,20 @@ with tab2:
     
     # Auto-scroll to chat history after search - always scroll if there's chat history
     if len(st.session_state.chat_history) > 0 and st.session_state.get('should_scroll', False):
-        # Use a unique key based on chat history length to ensure it runs each time
-        scroll_key = f"scroll_{len(st.session_state.chat_history)}"
+        # Include a unique timestamp in the HTML to force re-execution
+        import time
+        unique_id = int(time.time() * 1000)  # milliseconds timestamp
         components.html(
-            """
+            f"""
             <script>
+                // Unique execution ID: {unique_id}
                 // Function to scroll to chat section
-                function scrollToChat() {
+                function scrollToChat() {{
                     const chatSection = window.parent.document.getElementById('chat-history-section');
-                    if (chatSection) {
-                        chatSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    }
-                }
+                    if (chatSection) {{
+                        chatSection.scrollIntoView({{ behavior: 'smooth', block: 'start' }});
+                    }}
+                }}
                 
                 // Try multiple times to ensure it works
                 setTimeout(scrollToChat, 50);
@@ -1913,8 +1915,7 @@ with tab2:
                 setTimeout(scrollToChat, 500);
             </script>
             """,
-            height=0,
-            key=scroll_key
+            height=0
         )
         # Reset the flag after scroll is triggered
         st.session_state.should_scroll = False
