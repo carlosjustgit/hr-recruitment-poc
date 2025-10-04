@@ -952,6 +952,10 @@ def check_if_data_enriched(data):
     ]
     
     for entry in data:
+        # Skip non-dict entries
+        if not isinstance(entry, dict):
+            continue
+            
         # Check for important enriched fields
         has_enriched_field = False
         has_phantom_field = False
@@ -1668,26 +1672,7 @@ with tab2:
         
         return suggestions[:6]
     
-    # Display chat history
-    chat_container = st.container()
-    with chat_container:
-        for message in st.session_state.chat_history:
-            if message['role'] == 'user':
-                st.markdown(f"**🧑 You:** {message['content']}")
-            else:
-                st.markdown(f"**🤖 AI:** {message['content']}")
-                if 'candidates' in message and message['candidates']:
-                    with st.expander(f"📋 {len(message['candidates'])} matching candidates"):
-                        for i, candidate in enumerate(message['candidates'][:5]):
-                            name = candidate.get('Full Name', candidate.get('firstName', 'Unknown'))
-                            if not name or name == 'Unknown':
-                                name = f"{candidate.get('firstName', '')} {candidate.get('lastName', '')}".strip()
-                            headline = candidate.get('Linkedin Headline', candidate.get('linkedinHeadline', candidate.get('headline', 'No headline')))
-                            st.write(f"**{i+1}. {name}** - {headline}")
-    
-    st.divider()
-    
-    # Suggestions section
+    # Suggestions section at the top
     suggestions = generate_dynamic_suggestions(current_candidates)
     
     st.markdown("### 💡 Try these searches:")
@@ -1696,23 +1681,19 @@ with tab2:
         col_idx = idx % 3
         with cols[col_idx]:
             if st.button(suggestion, key=f"suggestion_{idx}", use_container_width=True):
-                st.session_state.pending_query = suggestion
-                st.rerun()
+                st.session_state.search_query_input = suggestion
+                st.session_state.trigger_search = True
     
     st.divider()
     
-    # Main chat input (more prominent)
+    # Main chat input at the top (more prominent)
     query = st.text_area(
         "Ask anything about your candidates:",
         placeholder="Example: Quien tiene experiencia en desarrollo web y habla inglés?",
         height=100,
-        key="chat_input"
+        key="chat_input",
+        value=st.session_state.get('search_query_input', '')
     )
-    
-    # Handle pending query from button clicks
-    if 'pending_query' in st.session_state:
-        query = st.session_state.pending_query
-        del st.session_state.pending_query
     
     # Send button
     col1, col2, col3 = st.columns([1, 1, 4])
@@ -1721,10 +1702,20 @@ with tab2:
     with col2:
         if st.button("🗑️ Clear Chat", use_container_width=True):
             st.session_state.chat_history = []
+            st.session_state.search_query_input = ''
             st.rerun()
     
+    # Check if search should be triggered
+    should_search = send_button or st.session_state.get('trigger_search', False)
+    
+    # Reset trigger flag
+    if 'trigger_search' in st.session_state:
+        del st.session_state.trigger_search
+    
+    st.divider()
+    
     # Process query
-    if send_button and query:
+    if should_search and query:
         with st.spinner("Searching..."):
             # Display the search query
             search_term = query or "your search"
@@ -1892,100 +1883,41 @@ with tab2:
                     'candidates': filtered_candidates[:5]
                 })
             
+            # Clear the input for next query
+            st.session_state.search_query_input = ''
+            
             # Force rerun to display the new message
             st.rerun()
-            
-            # Display results (kept for backward compatibility, but will be in chat history after rerun)
-            st.success(f"Found {len(filtered_candidates)} candidates matching '{search_term}'")
-            
-            # Results
-            for i, candidate in enumerate(filtered_candidates[:5]):  # Show top 5
-                score = candidate.get('match_score', 1)
-                match_percentage = min(int(score * 20), 95)  # Convert score to percentage, max 95%
-                
-                # Get name from various possible fields
-                name = candidate.get('Full Name', candidate.get('First Name', ''))
-                if not name and 'First Name' in candidate:
-                    name = f"{candidate.get('First Name', '')} {candidate.get('Last Name', '')}"
-                if not name:
-                    name = "Unknown"
-                    
-                # Get headline from various possible fields
-                headline = candidate.get('Linkedin Headline', candidate.get('headline', 'No headline'))
-                
-                with st.expander(f"{name} - {headline}"):
-                    col1, col2 = st.columns([2,1])
-                    
-                    with col1:
-                        # Company info
-                        company = candidate.get('Company Name', candidate.get('Linkedin Company Name', 
-                                  candidate.get('current_company', '')))
-                        if company:
-                            st.write(f"**Company:** {company}")
+    
+    # Display chat history BELOW the input
+    st.markdown("---")
+    st.markdown("### 💬 Chat History")
+    
+    if len(st.session_state.chat_history) == 0:
+        st.info("No messages yet. Ask a question above to get started!")
+    else:
+        for message in st.session_state.chat_history:
+            if message['role'] == 'user':
+                st.markdown(f"**🧑 You:** {message['content']}")
+            else:
+                st.markdown(f"**🤖 AI:** {message['content']}")
+                if 'candidates' in message and message['candidates']:
+                    with st.expander(f"📋 {len(message['candidates'])} matching candidates", expanded=True):
+                        for i, candidate in enumerate(message['candidates'][:5]):
+                            name = candidate.get('Full Name', candidate.get('firstName', 'Unknown'))
+                            if not name or name == 'Unknown':
+                                name = f"{candidate.get('firstName', '')} {candidate.get('lastName', '')}".strip()
+                            if not name:
+                                name = "Unknown"
+                            headline = candidate.get('Linkedin Headline', candidate.get('linkedinHeadline', candidate.get('headline', 'No headline')))
+                            company = candidate.get('Company Name', candidate.get('companyName', candidate.get('current_company', '')))
                             
-                            # Company industry
-                            industry = candidate.get('Company Industry', candidate.get('Linkedin Company Industry', ''))
-                            if industry:
-                                st.write(f"**Industry:** {industry}")
-                        
-                        # Job title
-                        job_title = candidate.get('Linkedin Job Title', candidate.get('jobTitle', ''))
-                        job_date = candidate.get('Linkedin Job Date Range', '')
-                        if job_title:
-                            job_info = f"**Job:** {job_title}"
-                            if job_date:
-                                job_info += f" ({job_date})"
-                            st.write(job_info)
-                        
-                        # Location
-                        location = candidate.get('Location', candidate.get('Linkedin Job Location', ''))
-                        if location:
-                            st.write(f"**Location:** {location}")
-                        
-                        # Education
-                        education = candidate.get('Linkedin School Degree', candidate.get('education', ''))
-                        school = candidate.get('Linkedin School Name', '')
-                        if education or school:
-                            edu_info = "**Education:** "
-                            if education and school:
-                                edu_info += f"{education} - {school}"
-                            elif education:
-                                edu_info += education
-                            elif school:
-                                edu_info += school
-                            st.write(edu_info)
-                        
-                        # Skills
-                        skills = candidate.get('Linkedin Skills Label', candidate.get('skills_tags', ''))
-                        if skills:
-                            st.write(f"**Skills:** {skills}")
-                            
-                        # Email
-                        email = candidate.get('Professional Email', '')
-                        if email:
-                            st.write(f"**Email:** {email}")
-                    
-                    with col2:
-                        st.write(f"**Match:** {match_percentage}%")
-                        
-                        # Profile image
-                        img_url = candidate.get('Linkedin Profile Image Url', '')
-                        if img_url:
-                            st.image(img_url, width=100)
-                        
-                        # LinkedIn link
-                        linkedin_url = candidate.get('Profile Url', candidate.get('Linkedin Profile Url', ''))
-                        if linkedin_url:
-                            st.markdown(f"[View LinkedIn]({linkedin_url})")
-                        
-                        # Google Sheet link
-                        sheet_url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}"
-                        st.markdown(f"[View in Sheet]({sheet_url})")
-                        
-                        # Last updated
-                        refreshed = candidate.get('Refreshed At', '')
-                        if refreshed:
-                            st.caption(f"Last updated: {refreshed}")
+                            st.write(f"**{i+1}. {name}**")
+                            st.write(f"   📌 {headline}")
+                            if company:
+                                st.write(f"   🏢 {company}")
+                            st.write("---")
+            st.markdown("")  # Add some spacing
 
 # Tab 3: Data View
 with tab3:
